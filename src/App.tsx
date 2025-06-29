@@ -65,8 +65,17 @@ function App() {
       alert('Impossible de modifier les adhérents : la saison est terminée');
       return;
     }
-    newAdherents.forEach(adherent => saveAdherent(adherent));
-    setAdherents(getAdherents());
+    
+    // Sauvegarder chaque adhérent et recharger les données
+    newAdherents.forEach(adherent => {
+      const success = saveAdherent(adherent);
+      if (!success) {
+        console.error('Erreur lors de la sauvegarde de l\'adhérent:', adherent);
+      }
+    });
+    
+    // Recharger les données depuis la base
+    loadAllData();
   };
 
   const handleDeleteAdherent = (id: string) => {
@@ -74,9 +83,11 @@ function App() {
       alert('Impossible de supprimer les adhérents : la saison est terminée');
       return;
     }
-    deleteAdherent(id);
-    setAdherents(getAdherents());
-    setActivites(getActivites());
+    
+    const success = deleteAdherent(id);
+    if (success) {
+      loadAllData();
+    }
   };
 
   // Gestionnaires pour les activités
@@ -85,8 +96,17 @@ function App() {
       alert('Impossible de modifier les activités : la saison est terminée');
       return;
     }
-    newActivites.forEach(activite => saveActivite(activite));
-    setActivites(getActivites());
+    
+    // Sauvegarder chaque activité et recharger les données
+    newActivites.forEach(activite => {
+      const success = saveActivite(activite);
+      if (!success) {
+        console.error('Erreur lors de la sauvegarde de l\'activité:', activite);
+      }
+    });
+    
+    // Recharger les données depuis la base
+    loadAllData();
   };
 
   const handleDeleteActivite = (id: string) => {
@@ -94,8 +114,11 @@ function App() {
       alert('Impossible de supprimer les activités : la saison est terminée');
       return;
     }
-    deleteActivite(id);
-    setActivites(getActivites());
+    
+    const success = deleteActivite(id);
+    if (success) {
+      loadAllData();
+    }
   };
 
   // Gestionnaires pour les paiements
@@ -104,8 +127,17 @@ function App() {
       alert('Impossible de modifier les paiements : la saison est terminée');
       return;
     }
-    newPaiements.forEach(paiement => savePaiement(paiement));
-    setPaiements(getPaiements());
+    
+    // Sauvegarder chaque paiement et recharger les données
+    newPaiements.forEach(paiement => {
+      const success = savePaiement(paiement);
+      if (!success) {
+        console.error('Erreur lors de la sauvegarde du paiement:', paiement);
+      }
+    });
+    
+    // Recharger les données depuis la base
+    loadAllData();
   };
 
   const handleDeletePaiement = (id: string) => {
@@ -113,82 +145,126 @@ function App() {
       alert('Impossible de supprimer les paiements : la saison est terminée');
       return;
     }
-    deletePaiement(id);
-    setPaiements(getPaiements());
+    
+    const success = deletePaiement(id);
+    if (success) {
+      loadAllData();
+    }
   };
 
   // Gestionnaires pour les tâches (pas de restriction de saison)
   const handleUpdateTaches = (newTaches: Tache[]) => {
-    newTaches.forEach(tache => saveTache(tache));
-    setTaches(getTaches());
+    // Sauvegarder chaque tâche et recharger les données
+    newTaches.forEach(tache => {
+      const success = saveTache(tache);
+      if (!success) {
+        console.error('Erreur lors de la sauvegarde de la tâche:', tache);
+      }
+    });
+    
+    // Recharger les données depuis la base
+    loadAllData();
   };
 
   const handleDeleteTache = (id: string) => {
-    deleteTache(id);
-    setTaches(getTaches());
+    const success = deleteTache(id);
+    if (success) {
+      loadAllData();
+    }
   };
 
   // Gestionnaires pour les événements (pas de restriction de saison)
   const handleUpdateEvenements = (newEvenements: EvenementAgenda[]) => {
-    newEvenements.forEach(evenement => saveEvenement(evenement));
-    setEvenements(getEvenements());
+    // Sauvegarder chaque événement et recharger les données
+    newEvenements.forEach(evenement => {
+      const success = saveEvenement(evenement);
+      if (!success) {
+        console.error('Erreur lors de la sauvegarde de l\'événement:', evenement);
+      }
+    });
+    
+    // Recharger les données depuis la base
+    loadAllData();
   };
 
   const handleDeleteEvenement = (id: string) => {
-    deleteEvenement(id);
-    setEvenements(getEvenements());
+    const success = deleteEvenement(id);
+    if (success) {
+      loadAllData();
+    }
   };
 
   // Gestionnaires pour les types d'adhésion
   const handleUpdateTypesAdhesion = (newTypes: TypeAdhesion[]) => {
-    newTypes.forEach(type => saveTypeAdhesion(type));
-    setTypesAdhesion(getTypesAdhesion());
+    newTypes.forEach(type => {
+      const success = saveTypeAdhesion(type);
+      if (!success) {
+        console.error('Erreur lors de la sauvegarde du type d\'adhésion:', type);
+      }
+    });
+    loadAllData();
   };
 
   const handleDeleteTypeAdhesion = (id: string) => {
-    deleteTypeAdhesion(id);
-    setTypesAdhesion(getTypesAdhesion());
+    const success = deleteTypeAdhesion(id);
+    if (success) {
+      loadAllData();
+    }
   };
 
   // Gestionnaires pour les modes de paiement
   const handleUpdateModesPaiement = (newModes: ModePaiement[]) => {
-    newModes.forEach(mode => saveModePaiement(mode));
-    setModesPaiement(getModesPaiement());
+    newModes.forEach(mode => {
+      const success = saveModePaiement(mode);
+      if (!success) {
+        console.error('Erreur lors de la sauvegarde du mode de paiement:', mode);
+      }
+    });
+    loadAllData();
   };
 
   const handleDeleteModePaiement = (id: string) => {
-    deleteModePaiement(id);
-    setModesPaiement(getModesPaiement());
+    const success = deleteModePaiement(id);
+    if (success) {
+      loadAllData();
+    }
   };
 
   // Gestionnaires pour les saisons
   const handleChangeSaison = (saisonId: string) => {
-    setSaisonActive(saisonId);
-    loadAllData(); // Recharger toutes les données pour la nouvelle saison
+    const success = setSaisonActive(saisonId);
+    if (success) {
+      loadAllData(); // Recharger toutes les données pour la nouvelle saison
+    }
   };
 
   const handleAddSaison = (saison: Saison) => {
-    addSaison(saison);
-    setSaisons(getSaisons());
-    loadAllData(); // Recharger pour voir les nouvelles données copiées
+    const success = addSaison(saison);
+    if (success) {
+      loadAllData(); // Recharger pour voir les nouvelles données copiées
+    }
   };
 
   const handleUpdateSaison = (saison: Saison) => {
-    updateSaison(saison);
-    setSaisons(getSaisons());
-    loadAllData(); // Recharger si la saison active a changé
+    const success = updateSaison(saison);
+    if (success) {
+      loadAllData(); // Recharger si la saison active a changé
+    }
   };
 
   const handleDeleteSaison = (id: string) => {
-    deleteSaison(id);
-    setSaisons(getSaisons());
-    loadAllData();
+    const success = deleteSaison(id);
+    if (success) {
+      loadAllData();
+    }
   };
 
   const handleUpdateSettings = (newSettings: AppSettings) => {
-    updateSettings(newSettings);
-    setSettings(newSettings);
-    loadAllData(); // Recharger les données si la saison a changé
+    const success = updateSettings(newSettings);
+    if (success) {
+      setSettings(newSettings);
+      loadAllData(); // Recharger les données si la saison a changé
+    }
   };
 
   const renderCurrentPage = () => {

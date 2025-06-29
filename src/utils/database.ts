@@ -68,8 +68,7 @@ const createTables = async (): Promise<void> => {
       email2 TEXT,
       typeAdhesion TEXT NOT NULL CHECK (typeAdhesion IN ('Individuelle', 'Famille')),
       saison TEXT NOT NULL,
-      createdAt TEXT NOT NULL,
-      FOREIGN KEY (saison) REFERENCES saisons(nom)
+      createdAt TEXT NOT NULL
     )`,
 
     // Table des activités
@@ -79,8 +78,7 @@ const createTables = async (): Promise<void> => {
       description TEXT NOT NULL,
       prix REAL NOT NULL,
       saison TEXT NOT NULL,
-      createdAt TEXT NOT NULL,
-      FOREIGN KEY (saison) REFERENCES saisons(nom)
+      createdAt TEXT NOT NULL
     )`,
 
     // Table de liaison adhérents-activités
@@ -104,8 +102,7 @@ const createTables = async (): Promise<void> => {
       saison TEXT NOT NULL,
       createdAt TEXT NOT NULL,
       FOREIGN KEY (adherentId) REFERENCES adherents(id) ON DELETE CASCADE,
-      FOREIGN KEY (activiteId) REFERENCES activites(id) ON DELETE CASCADE,
-      FOREIGN KEY (saison) REFERENCES saisons(nom)
+      FOREIGN KEY (activiteId) REFERENCES activites(id) ON DELETE CASCADE
     )`,
 
     // Table des tâches
