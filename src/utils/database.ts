@@ -150,7 +150,11 @@ const createTables = async (): Promise<void> => {
   ];
 
   queries.forEach(query => {
-    db.run(query);
+    try {
+      db.run(query);
+    } catch (error) {
+      console.error('Erreur lors de la création de table:', error, query);
+    }
   });
 
   // Index pour optimiser les performances
@@ -165,7 +169,11 @@ const createTables = async (): Promise<void> => {
   ];
 
   indexes.forEach(index => {
-    db.run(index);
+    try {
+      db.run(index);
+    } catch (error) {
+      console.error('Erreur lors de la création d\'index:', error, index);
+    }
   });
 };
 
@@ -174,60 +182,64 @@ const insertDefaultData = async (): Promise<void> => {
   const currentYear = new Date().getFullYear();
   const saisonActive = `${currentYear}-${currentYear + 1}`;
 
-  // Vérifier et insérer la saison par défaut si elle n'existe pas
-  const existingSaison = selectQuery('SELECT id FROM saisons WHERE nom = ?', [saisonActive]);
-  if (existingSaison.length === 0) {
-    db.run(
-      'INSERT INTO saisons (id, nom, dateDebut, dateFin, active, terminee) VALUES (?, ?, ?, ?, ?, ?)',
-      ['1', saisonActive, `${currentYear}-09-01`, `${currentYear + 1}-08-31`, 1, 0]
-    );
+  try {
+    // Vérifier et insérer la saison par défaut si elle n'existe pas
+    const existingSaison = selectQuery('SELECT id FROM saisons WHERE nom = ?', [saisonActive]);
+    if (existingSaison.length === 0) {
+      db.run(
+        'INSERT INTO saisons (id, nom, dateDebut, dateFin, active, terminee) VALUES (?, ?, ?, ?, ?, ?)',
+        ['1', saisonActive, `${currentYear}-09-01`, `${currentYear + 1}-08-31`, 1, 0]
+      );
+    }
+
+    // Vérifier et insérer les paramètres par défaut si ils n'existent pas
+    const existingSettings = selectQuery('SELECT id FROM settings LIMIT 1');
+    if (existingSettings.length === 0) {
+      db.run('INSERT INTO settings (saisonActive) VALUES (?)', [saisonActive]);
+    }
+
+    // Types d'adhésion par défaut
+    const typesAdhesion = [
+      ['1', 'Individuelle', 50],
+      ['2', 'Famille', 80]
+    ];
+    typesAdhesion.forEach(([id, nom, prix]) => {
+      const existing = selectQuery('SELECT id FROM types_adhesion WHERE id = ?', [id]);
+      if (existing.length === 0) {
+        db.run('INSERT INTO types_adhesion (id, nom, prix) VALUES (?, ?, ?)', [id, nom, prix]);
+      }
+    });
+
+    // Modes de paiement par défaut
+    const modesPaiement = [
+      ['1', 'Espèces'],
+      ['2', 'Chèque'],
+      ['3', 'Virement']
+    ];
+    modesPaiement.forEach(([id, nom]) => {
+      const existing = selectQuery('SELECT id FROM modes_paiement WHERE id = ?', [id]);
+      if (existing.length === 0) {
+        db.run('INSERT INTO modes_paiement (id, nom) VALUES (?, ?)', [id, nom]);
+      }
+    });
+
+    // Types d'événement par défaut
+    const typesEvenement = [
+      ['1', 'Activité', '#3B82F6'],
+      ['2', 'Réunion', '#10B981'],
+      ['3', 'Événement', '#8B5CF6']
+    ];
+    typesEvenement.forEach(([id, nom, couleur]) => {
+      const existing = selectQuery('SELECT id FROM types_evenement WHERE id = ?', [id]);
+      if (existing.length === 0) {
+        db.run('INSERT INTO types_evenement (id, nom, couleur) VALUES (?, ?, ?)', [id, nom, couleur]);
+      }
+    });
+
+    saveDatabase();
+  } catch (error) {
+    console.error('Erreur lors de l\'insertion des données par défaut:', error);
   }
-
-  // Vérifier et insérer les paramètres par défaut si ils n'existent pas
-  const existingSettings = selectQuery('SELECT id FROM settings LIMIT 1');
-  if (existingSettings.length === 0) {
-    db.run('INSERT INTO settings (saisonActive) VALUES (?)', [saisonActive]);
-  }
-
-  // Types d'adhésion par défaut
-  const typesAdhesion = [
-    ['1', 'Individuelle', 50],
-    ['2', 'Famille', 80]
-  ];
-  typesAdhesion.forEach(([id, nom, prix]) => {
-    const existing = selectQuery('SELECT id FROM types_adhesion WHERE id = ?', [id]);
-    if (existing.length === 0) {
-      db.run('INSERT INTO types_adhesion (id, nom, prix) VALUES (?, ?, ?)', [id, nom, prix]);
-    }
-  });
-
-  // Modes de paiement par défaut
-  const modesPaiement = [
-    ['1', 'Espèces'],
-    ['2', 'Chèque'],
-    ['3', 'Virement']
-  ];
-  modesPaiement.forEach(([id, nom]) => {
-    const existing = selectQuery('SELECT id FROM modes_paiement WHERE id = ?', [id]);
-    if (existing.length === 0) {
-      db.run('INSERT INTO modes_paiement (id, nom) VALUES (?, ?)', [id, nom]);
-    }
-  });
-
-  // Types d'événement par défaut
-  const typesEvenement = [
-    ['1', 'Activité', '#3B82F6'],
-    ['2', 'Réunion', '#10B981'],
-    ['3', 'Événement', '#8B5CF6']
-  ];
-  typesEvenement.forEach(([id, nom, couleur]) => {
-    const existing = selectQuery('SELECT id FROM types_evenement WHERE id = ?', [id]);
-    if (existing.length === 0) {
-      db.run('INSERT INTO types_evenement (id, nom, couleur) VALUES (?, ?, ?)', [id, nom, couleur]);
-    }
-  });
-
-  saveDatabase();
 };
 
 // Sauvegarde de la base de données
@@ -449,7 +461,10 @@ export const getAdherents = (): Adherent[] => {
 };
 
 export const saveAdherent = (adherent: Adherent): boolean => {
-  if (isSaisonTerminee()) return false;
+  if (isSaisonTerminee()) {
+    console.error('Saison terminée - impossible de sauvegarder l\'adhérent');
+    return false;
+  }
   
   try {
     db.run('BEGIN TRANSACTION');
@@ -478,6 +493,7 @@ export const saveAdherent = (adherent: Adherent): boolean => {
     
     db.run('COMMIT');
     saveDatabase();
+    console.log('Adhérent sauvegardé avec succès:', adherent.nom, adherent.prenom);
     return true;
   } catch (error) {
     db.run('ROLLBACK');
@@ -530,7 +546,10 @@ export const getActivites = (): Activite[] => {
 };
 
 export const saveActivite = (activite: Activite): boolean => {
-  if (isSaisonTerminee()) return false;
+  if (isSaisonTerminee()) {
+    console.error('Saison terminée - impossible de sauvegarder l\'activité');
+    return false;
+  }
   
   try {
     db.run('BEGIN TRANSACTION');
@@ -559,6 +578,7 @@ export const saveActivite = (activite: Activite): boolean => {
     
     db.run('COMMIT');
     saveDatabase();
+    console.log('Activité sauvegardée avec succès:', activite.nom);
     return true;
   } catch (error) {
     db.run('ROLLBACK');
@@ -604,7 +624,10 @@ export const getPaiements = (): Paiement[] => {
 };
 
 export const savePaiement = (paiement: Paiement): boolean => {
-  if (isSaisonTerminee()) return false;
+  if (isSaisonTerminee()) {
+    console.error('Saison terminée - impossible de sauvegarder le paiement');
+    return false;
+  }
   
   try {
     const exists = selectQuery('SELECT id FROM paiements WHERE id = ?', [paiement.id]);
@@ -622,6 +645,7 @@ export const savePaiement = (paiement: Paiement): boolean => {
     }
     
     saveDatabase();
+    console.log('Paiement sauvegardé avec succès:', paiement.id);
     return true;
   } catch (error) {
     console.error('Erreur lors de la sauvegarde du paiement:', error);
