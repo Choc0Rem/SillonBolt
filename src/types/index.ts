@@ -8,9 +8,9 @@ export interface Adherent {
   codePostal: string;
   ville: string;
   telephone: string;
-  telephone2?: string; // Nouveau champ optionnel
+  telephone2?: string;
   email: string;
-  email2?: string; // Nouveau champ optionnel
+  email2?: string;
   typeAdhesion: 'Individuelle' | 'Famille';
   activites: string[]; // IDs des activités
   saison: string;

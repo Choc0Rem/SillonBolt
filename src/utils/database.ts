@@ -9,20 +9,27 @@ const DB_NAME = 'association_database.db';
 // Initialisation de SQLite
 export const initDatabase = async (): Promise<boolean> => {
   try {
+    console.log('Début initialisation SQLite...');
+    
     // Charger SQL.js
     SQL = await initSqlJs({
       locateFile: (file: string) => `https://sql.js.org/dist/${file}`
     });
+    console.log('SQL.js chargé avec succès');
 
     // Charger la base existante ou créer une nouvelle
     const savedDb = localStorage.getItem(DB_NAME);
     if (savedDb) {
+      console.log('Base de données existante trouvée, chargement...');
       const uint8Array = new Uint8Array(JSON.parse(savedDb));
       db = new SQL.Database(uint8Array);
+      console.log('Base de données existante chargée');
     } else {
+      console.log('Création d\'une nouvelle base de données...');
       db = new SQL.Database();
       await createTables();
       await insertDefaultData();
+      console.log('Nouvelle base de données créée');
     }
 
     console.log('Base de données SQLite initialisée avec succès');
@@ -35,6 +42,8 @@ export const initDatabase = async (): Promise<boolean> => {
 
 // Création des tables
 const createTables = async (): Promise<void> => {
+  console.log('Création des tables...');
+  
   const queries = [
     // Table des saisons
     `CREATE TABLE IF NOT EXISTS saisons (
@@ -149,11 +158,12 @@ const createTables = async (): Promise<void> => {
     )`
   ];
 
-  queries.forEach(query => {
+  queries.forEach((query, index) => {
     try {
       db.run(query);
+      console.log(`Table ${index + 1} créée avec succès`);
     } catch (error) {
-      console.error('Erreur lors de la création de table:', error, query);
+      console.error(`Erreur lors de la création de la table ${index + 1}:`, error, query);
     }
   });
 
@@ -168,17 +178,22 @@ const createTables = async (): Promise<void> => {
     'CREATE INDEX IF NOT EXISTS idx_adherent_activites_activite ON adherent_activites(activiteId)'
   ];
 
-  indexes.forEach(index => {
+  indexes.forEach((index, i) => {
     try {
       db.run(index);
+      console.log(`Index ${i + 1} créé avec succès`);
     } catch (error) {
-      console.error('Erreur lors de la création d\'index:', error, index);
+      console.error(`Erreur lors de la création de l'index ${i + 1}:`, error, index);
     }
   });
+  
+  console.log('Tables et index créés avec succès');
 };
 
 // Insertion des données par défaut
 const insertDefaultData = async (): Promise<void> => {
+  console.log('Insertion des données par défaut...');
+  
   const currentYear = new Date().getFullYear();
   const saisonActive = `${currentYear}-${currentYear + 1}`;
 
@@ -190,12 +205,14 @@ const insertDefaultData = async (): Promise<void> => {
         'INSERT INTO saisons (id, nom, dateDebut, dateFin, active, terminee) VALUES (?, ?, ?, ?, ?, ?)',
         ['1', saisonActive, `${currentYear}-09-01`, `${currentYear + 1}-08-31`, 1, 0]
       );
+      console.log('Saison par défaut créée:', saisonActive);
     }
 
     // Vérifier et insérer les paramètres par défaut si ils n'existent pas
     const existingSettings = selectQuery('SELECT id FROM settings LIMIT 1');
     if (existingSettings.length === 0) {
       db.run('INSERT INTO settings (saisonActive) VALUES (?)', [saisonActive]);
+      console.log('Paramètres par défaut créés');
     }
 
     // Types d'adhésion par défaut
@@ -207,6 +224,7 @@ const insertDefaultData = async (): Promise<void> => {
       const existing = selectQuery('SELECT id FROM types_adhesion WHERE id = ?', [id]);
       if (existing.length === 0) {
         db.run('INSERT INTO types_adhesion (id, nom, prix) VALUES (?, ?, ?)', [id, nom, prix]);
+        console.log('Type d\'adhésion créé:', nom);
       }
     });
 
@@ -220,6 +238,7 @@ const insertDefaultData = async (): Promise<void> => {
       const existing = selectQuery('SELECT id FROM modes_paiement WHERE id = ?', [id]);
       if (existing.length === 0) {
         db.run('INSERT INTO modes_paiement (id, nom) VALUES (?, ?)', [id, nom]);
+        console.log('Mode de paiement créé:', nom);
       }
     });
 
@@ -233,10 +252,12 @@ const insertDefaultData = async (): Promise<void> => {
       const existing = selectQuery('SELECT id FROM types_evenement WHERE id = ?', [id]);
       if (existing.length === 0) {
         db.run('INSERT INTO types_evenement (id, nom, couleur) VALUES (?, ?, ?)', [id, nom, couleur]);
+        console.log('Type d\'événement créé:', nom);
       }
     });
 
     saveDatabase();
+    console.log('Données par défaut insérées avec succès');
   } catch (error) {
     console.error('Erreur lors de l\'insertion des données par défaut:', error);
   }
@@ -245,11 +266,15 @@ const insertDefaultData = async (): Promise<void> => {
 // Sauvegarde de la base de données
 export const saveDatabase = (): boolean => {
   try {
-    if (!db) return false;
+    if (!db) {
+      console.error('Base de données non initialisée');
+      return false;
+    }
     
     const data = db.export();
     const buffer = Array.from(data);
     localStorage.setItem(DB_NAME, JSON.stringify(buffer));
+    console.log('Base de données sauvegardée');
     return true;
   } catch (error) {
     console.error('Erreur lors de la sauvegarde:', error);
@@ -260,7 +285,13 @@ export const saveDatabase = (): boolean => {
 // Fonction utilitaire pour exécuter une requête avec gestion d'erreur
 const executeQuery = (query: string, params: any[] = []): any => {
   try {
-    return db.run(query, params);
+    if (!db) {
+      throw new Error('Base de données non initialisée');
+    }
+    console.log('Exécution requête:', query, 'Params:', params);
+    const result = db.run(query, params);
+    console.log('Requête exécutée avec succès');
+    return result;
   } catch (error) {
     console.error('Erreur SQL:', error, 'Query:', query, 'Params:', params);
     throw error;
@@ -270,12 +301,19 @@ const executeQuery = (query: string, params: any[] = []): any => {
 // Fonction utilitaire pour exécuter une requête de sélection
 const selectQuery = (query: string, params: any[] = []): any[] => {
   try {
+    if (!db) {
+      console.error('Base de données non initialisée pour SELECT');
+      return [];
+    }
+    
+    console.log('Exécution SELECT:', query, 'Params:', params);
     const stmt = db.prepare(query);
     const results = [];
     while (stmt.step()) {
       results.push(stmt.getAsObject());
     }
     stmt.free();
+    console.log('SELECT exécuté, résultats:', results.length);
     return results;
   } catch (error) {
     console.error('Erreur SQL SELECT:', error, 'Query:', query, 'Params:', params);
@@ -303,6 +341,8 @@ export const getSaisonActive = (): string => {
 
 export const isSaisonTerminee = (): boolean => {
   const saisonActive = getSaisonActive();
+  if (!saisonActive) return false;
+  
   const result = selectQuery('SELECT terminee FROM saisons WHERE nom = ?', [saisonActive]);
   return result.length > 0 ? Boolean(result[0].terminee) : false;
 };
@@ -430,6 +470,11 @@ export const deleteSaison = (id: string): boolean => {
 // Fonctions pour les adhérents
 export const getAdherents = (): Adherent[] => {
   const saisonActive = getSaisonActive();
+  if (!saisonActive) {
+    console.warn('Aucune saison active définie');
+    return [];
+  }
+  
   const results = selectQuery('SELECT * FROM adherents WHERE saison = ? ORDER BY nom, prenom', [saisonActive]);
   
   return results.map(row => {
@@ -467,18 +512,32 @@ export const saveAdherent = (adherent: Adherent): boolean => {
   }
   
   try {
+    console.log('Sauvegarde adhérent:', adherent);
+    
+    // Vérifier que la saison est définie
+    if (!adherent.saison) {
+      adherent.saison = getSaisonActive();
+    }
+    
+    if (!adherent.saison) {
+      console.error('Aucune saison définie pour l\'adhérent');
+      return false;
+    }
+    
     db.run('BEGIN TRANSACTION');
     
     const exists = selectQuery('SELECT id FROM adherents WHERE id = ?', [adherent.id]);
     
     if (exists.length > 0) {
       // Mise à jour
+      console.log('Mise à jour adhérent existant');
       executeQuery(
         'UPDATE adherents SET nom = ?, prenom = ?, dateNaissance = ?, sexe = ?, adresse = ?, codePostal = ?, ville = ?, telephone = ?, telephone2 = ?, email = ?, email2 = ?, typeAdhesion = ? WHERE id = ?',
         [adherent.nom, adherent.prenom, adherent.dateNaissance, adherent.sexe, adherent.adresse, adherent.codePostal, adherent.ville, adherent.telephone, adherent.telephone2 || null, adherent.email, adherent.email2 || null, adherent.typeAdhesion, adherent.id]
       );
     } else {
       // Insertion
+      console.log('Insertion nouvel adhérent');
       executeQuery(
         'INSERT INTO adherents (id, nom, prenom, dateNaissance, sexe, adresse, codePostal, ville, telephone, telephone2, email, email2, typeAdhesion, saison, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [adherent.id, adherent.nom, adherent.prenom, adherent.dateNaissance, adherent.sexe, adherent.adresse, adherent.codePostal, adherent.ville, adherent.telephone, adherent.telephone2 || null, adherent.email, adherent.email2 || null, adherent.typeAdhesion, adherent.saison, adherent.createdAt]
@@ -524,6 +583,11 @@ export const deleteAdherent = (id: string): boolean => {
 // Fonctions pour les activités
 export const getActivites = (): Activite[] => {
   const saisonActive = getSaisonActive();
+  if (!saisonActive) {
+    console.warn('Aucune saison active définie');
+    return [];
+  }
+  
   const results = selectQuery('SELECT * FROM activites WHERE saison = ? ORDER BY nom', [saisonActive]);
   
   return results.map(row => {
@@ -552,18 +616,32 @@ export const saveActivite = (activite: Activite): boolean => {
   }
   
   try {
+    console.log('Sauvegarde activité:', activite);
+    
+    // Vérifier que la saison est définie
+    if (!activite.saison) {
+      activite.saison = getSaisonActive();
+    }
+    
+    if (!activite.saison) {
+      console.error('Aucune saison définie pour l\'activité');
+      return false;
+    }
+    
     db.run('BEGIN TRANSACTION');
     
     const exists = selectQuery('SELECT id FROM activites WHERE id = ?', [activite.id]);
     
     if (exists.length > 0) {
       // Mise à jour
+      console.log('Mise à jour activité existante');
       executeQuery(
         'UPDATE activites SET nom = ?, description = ?, prix = ? WHERE id = ?',
         [activite.nom, activite.description, activite.prix, activite.id]
       );
     } else {
       // Insertion
+      console.log('Insertion nouvelle activité');
       executeQuery(
         'INSERT INTO activites (id, nom, description, prix, saison, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
         [activite.id, activite.nom, activite.description, activite.prix, activite.saison, activite.createdAt]
@@ -608,6 +686,11 @@ export const deleteActivite = (id: string): boolean => {
 // Fonctions pour les paiements
 export const getPaiements = (): Paiement[] => {
   const saisonActive = getSaisonActive();
+  if (!saisonActive) {
+    console.warn('Aucune saison active définie');
+    return [];
+  }
+  
   const results = selectQuery('SELECT * FROM paiements WHERE saison = ? ORDER BY createdAt DESC', [saisonActive]);
   
   return results.map(row => ({
@@ -630,14 +713,28 @@ export const savePaiement = (paiement: Paiement): boolean => {
   }
   
   try {
+    console.log('Sauvegarde paiement:', paiement);
+    
+    // Vérifier que la saison est définie
+    if (!paiement.saison) {
+      paiement.saison = getSaisonActive();
+    }
+    
+    if (!paiement.saison) {
+      console.error('Aucune saison définie pour le paiement');
+      return false;
+    }
+    
     const exists = selectQuery('SELECT id FROM paiements WHERE id = ?', [paiement.id]);
     
     if (exists.length > 0) {
+      console.log('Mise à jour paiement existant');
       executeQuery(
         'UPDATE paiements SET adherentId = ?, activiteId = ?, montant = ?, datePaiement = ?, modePaiement = ?, statut = ? WHERE id = ?',
         [paiement.adherentId, paiement.activiteId, paiement.montant, paiement.datePaiement || null, paiement.modePaiement, paiement.statut, paiement.id]
       );
     } else {
+      console.log('Insertion nouveau paiement');
       executeQuery(
         'INSERT INTO paiements (id, adherentId, activiteId, montant, datePaiement, modePaiement, statut, saison, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [paiement.id, paiement.adherentId, paiement.activiteId, paiement.montant, paiement.datePaiement || null, paiement.modePaiement, paiement.statut, paiement.saison, paiement.createdAt]
@@ -683,14 +780,18 @@ export const getTaches = (): Tache[] => {
 
 export const saveTache = (tache: Tache): boolean => {
   try {
+    console.log('Sauvegarde tâche:', tache);
+    
     const exists = selectQuery('SELECT id FROM taches WHERE id = ?', [tache.id]);
     
     if (exists.length > 0) {
+      console.log('Mise à jour tâche existante');
       executeQuery(
         'UPDATE taches SET nom = ?, description = ?, dateEcheance = ?, type = ?, statut = ? WHERE id = ?',
         [tache.nom, tache.description, tache.dateEcheance || null, tache.type, tache.statut, tache.id]
       );
     } else {
+      console.log('Insertion nouvelle tâche');
       executeQuery(
         'INSERT INTO taches (id, nom, description, dateEcheance, type, statut, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [tache.id, tache.nom, tache.description, tache.dateEcheance || null, tache.type, tache.statut, tache.createdAt]
@@ -698,6 +799,7 @@ export const saveTache = (tache: Tache): boolean => {
     }
     
     saveDatabase();
+    console.log('Tâche sauvegardée avec succès:', tache.nom);
     return true;
   } catch (error) {
     console.error('Erreur lors de la sauvegarde de la tâche:', error);
@@ -734,14 +836,18 @@ export const getEvenements = (): EvenementAgenda[] => {
 
 export const saveEvenement = (evenement: EvenementAgenda): boolean => {
   try {
+    console.log('Sauvegarde événement:', evenement);
+    
     const exists = selectQuery('SELECT id FROM evenements WHERE id = ?', [evenement.id]);
     
     if (exists.length > 0) {
+      console.log('Mise à jour événement existant');
       executeQuery(
         'UPDATE evenements SET titre = ?, description = ?, dateDebut = ?, dateFin = ?, lieu = ?, type = ? WHERE id = ?',
         [evenement.titre, evenement.description, evenement.dateDebut, evenement.dateFin, evenement.lieu || null, evenement.type, evenement.id]
       );
     } else {
+      console.log('Insertion nouvel événement');
       executeQuery(
         'INSERT INTO evenements (id, titre, description, dateDebut, dateFin, lieu, type, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [evenement.id, evenement.titre, evenement.description, evenement.dateDebut, evenement.dateFin, evenement.lieu || null, evenement.type, evenement.createdAt]
@@ -749,6 +855,7 @@ export const saveEvenement = (evenement: EvenementAgenda): boolean => {
     }
     
     saveDatabase();
+    console.log('Événement sauvegardé avec succès:', evenement.titre);
     return true;
   } catch (error) {
     console.error('Erreur lors de la sauvegarde de l\'événement:', error);
