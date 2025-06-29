@@ -1,33 +1,65 @@
-import initSqlJs from 'sql.js';
+// Système de base de données simple utilisant localStorage
 import { Adherent, Activite, Paiement, Tache, EvenementAgenda, TypeAdhesion, ModePaiement, Saison, AppSettings, TypeEvenement } from '../types';
 
-// Variables globales
-let SQL: any = null;
-let db: any = null;
-const DB_NAME = 'association_database.db';
+// Clés pour localStorage
+const STORAGE_KEYS = {
+  ADHERENTS: 'association_adherents',
+  ACTIVITES: 'association_activites',
+  PAIEMENTS: 'association_paiements',
+  TACHES: 'association_taches',
+  EVENEMENTS: 'association_evenements',
+  TYPES_ADHESION: 'association_types_adhesion',
+  MODES_PAIEMENT: 'association_modes_paiement',
+  TYPES_EVENEMENT: 'association_types_evenement',
+  SAISONS: 'association_saisons',
+  SETTINGS: 'association_settings'
+};
 
-// Initialisation de SQLite
+// Fonction utilitaire pour sauvegarder dans localStorage
+const saveToStorage = (key: string, data: any): boolean => {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+    console.log(`Données sauvegardées: ${key}`, data);
+    return true;
+  } catch (error) {
+    console.error(`Erreur lors de la sauvegarde ${key}:`, error);
+    return false;
+  }
+};
+
+// Fonction utilitaire pour charger depuis localStorage
+const loadFromStorage = <T>(key: string, defaultValue: T): T => {
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      console.log(`Données chargées: ${key}`, parsed);
+      return parsed;
+    }
+    console.log(`Aucune donnée trouvée pour ${key}, utilisation des valeurs par défaut`);
+    return defaultValue;
+  } catch (error) {
+    console.error(`Erreur lors du chargement ${key}:`, error);
+    return defaultValue;
+  }
+};
+
+// Initialisation de la base de données
 export const initDatabase = async (): Promise<boolean> => {
   try {
-    // Charger SQL.js
-    SQL = await initSqlJs({
-      locateFile: (file: string) => `https://sql.js.org/dist/${file}`
-    });
-
-    // Charger la base existante ou créer une nouvelle
-    const savedDb = localStorage.getItem(DB_NAME);
-    if (savedDb) {
-      const uint8Array = new Uint8Array(JSON.parse(savedDb));
-      db = new SQL.Database(uint8Array);
-      console.log('Base de données chargée depuis localStorage');
+    console.log('Initialisation de la base de données...');
+    
+    // Vérifier si c'est la première fois
+    const existingSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+    
+    if (!existingSettings) {
+      console.log('Première initialisation - création des données par défaut');
+      await createDefaultData();
     } else {
-      db = new SQL.Database();
-      await createTables();
-      await insertDefaultData();
-      console.log('Nouvelle base de données créée');
+      console.log('Base de données existante trouvée');
     }
-
-    console.log('Base de données SQLite initialisée avec succès');
+    
+    console.log('Base de données initialisée avec succès');
     return true;
   } catch (error) {
     console.error('Erreur lors de l\'initialisation de la base de données:', error);
@@ -35,292 +67,109 @@ export const initDatabase = async (): Promise<boolean> => {
   }
 };
 
-// Création des tables
-const createTables = async (): Promise<void> => {
-  const queries = [
-    // Table des saisons
-    `CREATE TABLE IF NOT EXISTS saisons (
-      id TEXT PRIMARY KEY,
-      nom TEXT NOT NULL UNIQUE,
-      dateDebut TEXT NOT NULL,
-      dateFin TEXT NOT NULL,
-      active INTEGER DEFAULT 0,
-      terminee INTEGER DEFAULT 0
-    )`,
-
-    // Table des paramètres
-    `CREATE TABLE IF NOT EXISTS settings (
-      id INTEGER PRIMARY KEY,
-      saisonActive TEXT NOT NULL
-    )`,
-
-    // Table des adhérents
-    `CREATE TABLE IF NOT EXISTS adherents (
-      id TEXT PRIMARY KEY,
-      nom TEXT NOT NULL,
-      prenom TEXT NOT NULL,
-      dateNaissance TEXT NOT NULL,
-      sexe TEXT NOT NULL CHECK (sexe IN ('Homme', 'Femme')),
-      adresse TEXT NOT NULL,
-      codePostal TEXT NOT NULL,
-      ville TEXT NOT NULL,
-      telephone TEXT NOT NULL,
-      telephone2 TEXT,
-      email TEXT NOT NULL,
-      email2 TEXT,
-      typeAdhesion TEXT NOT NULL CHECK (typeAdhesion IN ('Individuelle', 'Famille')),
-      saison TEXT NOT NULL,
-      createdAt TEXT NOT NULL,
-      FOREIGN KEY (saison) REFERENCES saisons(nom)
-    )`,
-
-    // Table des activités
-    `CREATE TABLE IF NOT EXISTS activites (
-      id TEXT PRIMARY KEY,
-      nom TEXT NOT NULL,
-      description TEXT NOT NULL,
-      prix REAL NOT NULL,
-      saison TEXT NOT NULL,
-      createdAt TEXT NOT NULL,
-      FOREIGN KEY (saison) REFERENCES saisons(nom)
-    )`,
-
-    // Table de liaison adhérents-activités
-    `CREATE TABLE IF NOT EXISTS adherent_activites (
-      adherentId TEXT,
-      activiteId TEXT,
-      PRIMARY KEY (adherentId, activiteId),
-      FOREIGN KEY (adherentId) REFERENCES adherents(id) ON DELETE CASCADE,
-      FOREIGN KEY (activiteId) REFERENCES activites(id) ON DELETE CASCADE
-    )`,
-
-    // Table des paiements
-    `CREATE TABLE IF NOT EXISTS paiements (
-      id TEXT PRIMARY KEY,
-      adherentId TEXT NOT NULL,
-      activiteId TEXT NOT NULL,
-      montant REAL NOT NULL,
-      datePaiement TEXT,
-      modePaiement TEXT NOT NULL,
-      statut TEXT NOT NULL CHECK (statut IN ('Payé', 'En attente')),
-      saison TEXT NOT NULL,
-      createdAt TEXT NOT NULL,
-      FOREIGN KEY (adherentId) REFERENCES adherents(id) ON DELETE CASCADE,
-      FOREIGN KEY (activiteId) REFERENCES activites(id) ON DELETE CASCADE,
-      FOREIGN KEY (saison) REFERENCES saisons(nom)
-    )`,
-
-    // Table des tâches
-    `CREATE TABLE IF NOT EXISTS taches (
-      id TEXT PRIMARY KEY,
-      nom TEXT NOT NULL,
-      description TEXT NOT NULL,
-      dateEcheance TEXT,
-      type TEXT NOT NULL CHECK (type IN ('Urgent', 'Important', 'Normal')),
-      statut TEXT NOT NULL CHECK (statut IN ('À faire', 'En cours', 'Terminé')),
-      createdAt TEXT NOT NULL
-    )`,
-
-    // Table des événements
-    `CREATE TABLE IF NOT EXISTS evenements (
-      id TEXT PRIMARY KEY,
-      titre TEXT NOT NULL,
-      description TEXT NOT NULL,
-      dateDebut TEXT NOT NULL,
-      dateFin TEXT NOT NULL,
-      lieu TEXT,
-      type TEXT NOT NULL,
-      createdAt TEXT NOT NULL
-    )`,
-
-    // Table des types d'adhésion
-    `CREATE TABLE IF NOT EXISTS types_adhesion (
-      id TEXT PRIMARY KEY,
-      nom TEXT NOT NULL UNIQUE,
-      prix REAL NOT NULL
-    )`,
-
-    // Table des modes de paiement
-    `CREATE TABLE IF NOT EXISTS modes_paiement (
-      id TEXT PRIMARY KEY,
-      nom TEXT NOT NULL UNIQUE
-    )`,
-
-    // Table des types d'événement
-    `CREATE TABLE IF NOT EXISTS types_evenement (
-      id TEXT PRIMARY KEY,
-      nom TEXT NOT NULL UNIQUE,
-      couleur TEXT NOT NULL
-    )`
-  ];
-
-  queries.forEach(query => {
-    db.run(query);
-  });
-
-  // Index pour optimiser les performances
-  const indexes = [
-    'CREATE INDEX IF NOT EXISTS idx_adherents_saison ON adherents(saison)',
-    'CREATE INDEX IF NOT EXISTS idx_activites_saison ON activites(saison)',
-    'CREATE INDEX IF NOT EXISTS idx_paiements_saison ON paiements(saison)',
-    'CREATE INDEX IF NOT EXISTS idx_paiements_adherent ON paiements(adherentId)',
-    'CREATE INDEX IF NOT EXISTS idx_paiements_activite ON paiements(activiteId)',
-    'CREATE INDEX IF NOT EXISTS idx_adherent_activites_adherent ON adherent_activites(adherentId)',
-    'CREATE INDEX IF NOT EXISTS idx_adherent_activites_activite ON adherent_activites(activiteId)'
-  ];
-
-  indexes.forEach(index => {
-    db.run(index);
-  });
-};
-
-// Insertion des données par défaut
-const insertDefaultData = async (): Promise<void> => {
+// Création des données par défaut
+const createDefaultData = async (): Promise<void> => {
   const currentYear = new Date().getFullYear();
   const saisonActive = `${currentYear}-${currentYear + 1}`;
 
-  // Vérifier et insérer la saison par défaut si elle n'existe pas
-  const existingSaison = selectQuery('SELECT id FROM saisons WHERE nom = ?', [saisonActive]);
-  if (existingSaison.length === 0) {
-    db.run(
-      'INSERT INTO saisons (id, nom, dateDebut, dateFin, active, terminee) VALUES (?, ?, ?, ?, ?, ?)',
-      ['1', saisonActive, `${currentYear}-09-01`, `${currentYear + 1}-08-31`, 1, 0]
-    );
-  }
+  // Saison par défaut
+  const defaultSaisons: Saison[] = [{
+    id: '1',
+    nom: saisonActive,
+    dateDebut: `${currentYear}-09-01`,
+    dateFin: `${currentYear + 1}-08-31`,
+    active: true,
+    terminee: false
+  }];
 
-  // Vérifier et insérer les paramètres par défaut si ils n'existent pas
-  const existingSettings = selectQuery('SELECT id FROM settings LIMIT 1');
-  if (existingSettings.length === 0) {
-    db.run('INSERT INTO settings (saisonActive) VALUES (?)', [saisonActive]);
-  }
+  // Paramètres par défaut
+  const defaultSettings: AppSettings = {
+    saisonActive: saisonActive,
+    saisons: defaultSaisons
+  };
 
   // Types d'adhésion par défaut
-  const typesAdhesion = [
-    ['1', 'Individuelle', 50],
-    ['2', 'Famille', 80]
+  const defaultTypesAdhesion: TypeAdhesion[] = [
+    { id: '1', nom: 'Individuelle', prix: 50 },
+    { id: '2', nom: 'Famille', prix: 80 }
   ];
-  typesAdhesion.forEach(([id, nom, prix]) => {
-    const existing = selectQuery('SELECT id FROM types_adhesion WHERE id = ?', [id]);
-    if (existing.length === 0) {
-      db.run('INSERT INTO types_adhesion (id, nom, prix) VALUES (?, ?, ?)', [id, nom, prix]);
-    }
-  });
 
   // Modes de paiement par défaut
-  const modesPaiement = [
-    ['1', 'Espèces'],
-    ['2', 'Chèque'],
-    ['3', 'Virement']
+  const defaultModesPaiement: ModePaiement[] = [
+    { id: '1', nom: 'Espèces' },
+    { id: '2', nom: 'Chèque' },
+    { id: '3', nom: 'Virement' }
   ];
-  modesPaiement.forEach(([id, nom]) => {
-    const existing = selectQuery('SELECT id FROM modes_paiement WHERE id = ?', [id]);
-    if (existing.length === 0) {
-      db.run('INSERT INTO modes_paiement (id, nom) VALUES (?, ?)', [id, nom]);
-    }
-  });
 
   // Types d'événement par défaut
-  const typesEvenement = [
-    ['1', 'Activité', '#3B82F6'],
-    ['2', 'Réunion', '#10B981'],
-    ['3', 'Événement', '#8B5CF6']
+  const defaultTypesEvenement: TypeEvenement[] = [
+    { id: '1', nom: 'Activité', couleur: '#3B82F6' },
+    { id: '2', nom: 'Réunion', couleur: '#10B981' },
+    { id: '3', nom: 'Événement', couleur: '#8B5CF6' }
   ];
-  typesEvenement.forEach(([id, nom, couleur]) => {
-    const existing = selectQuery('SELECT id FROM types_evenement WHERE id = ?', [id]);
-    if (existing.length === 0) {
-      db.run('INSERT INTO types_evenement (id, nom, couleur) VALUES (?, ?, ?)', [id, nom, couleur]);
-    }
-  });
 
-  saveDatabase();
-};
+  // Sauvegarder toutes les données par défaut
+  saveToStorage(STORAGE_KEYS.SAISONS, defaultSaisons);
+  saveToStorage(STORAGE_KEYS.SETTINGS, defaultSettings);
+  saveToStorage(STORAGE_KEYS.TYPES_ADHESION, defaultTypesAdhesion);
+  saveToStorage(STORAGE_KEYS.MODES_PAIEMENT, defaultModesPaiement);
+  saveToStorage(STORAGE_KEYS.TYPES_EVENEMENT, defaultTypesEvenement);
+  saveToStorage(STORAGE_KEYS.ADHERENTS, []);
+  saveToStorage(STORAGE_KEYS.ACTIVITES, []);
+  saveToStorage(STORAGE_KEYS.PAIEMENTS, []);
+  saveToStorage(STORAGE_KEYS.TACHES, []);
+  saveToStorage(STORAGE_KEYS.EVENEMENTS, []);
 
-// Sauvegarde de la base de données
-export const saveDatabase = (): boolean => {
-  try {
-    if (!db) return false;
-    
-    const data = db.export();
-    const buffer = Array.from(data);
-    localStorage.setItem(DB_NAME, JSON.stringify(buffer));
-    return true;
-  } catch (error) {
-    console.error('Erreur lors de la sauvegarde:', error);
-    return false;
-  }
-};
-
-// Fonction utilitaire pour exécuter une requête avec gestion d'erreur
-const executeQuery = (query: string, params: any[] = []): any => {
-  try {
-    return db.run(query, params);
-  } catch (error) {
-    console.error('Erreur SQL:', error, 'Query:', query, 'Params:', params);
-    throw error;
-  }
-};
-
-// Fonction utilitaire pour exécuter une requête de sélection
-const selectQuery = (query: string, params: any[] = []): any[] => {
-  try {
-    const stmt = db.prepare(query);
-    const results = [];
-    while (stmt.step()) {
-      results.push(stmt.getAsObject());
-    }
-    stmt.free();
-    return results;
-  } catch (error) {
-    console.error('Erreur SQL SELECT:', error, 'Query:', query, 'Params:', params);
-    return [];
-  }
+  console.log('Données par défaut créées');
 };
 
 // Fonctions pour les saisons
 export const getSaisons = (): Saison[] => {
-  const results = selectQuery('SELECT * FROM saisons ORDER BY dateDebut DESC');
-  return results.map(row => ({
-    id: row.id,
-    nom: row.nom,
-    dateDebut: row.dateDebut,
-    dateFin: row.dateFin,
-    active: Boolean(row.active),
-    terminee: Boolean(row.terminee)
-  }));
+  return loadFromStorage(STORAGE_KEYS.SAISONS, []);
 };
 
 export const getSaisonActive = (): string => {
-  const result = selectQuery('SELECT saisonActive FROM settings LIMIT 1');
-  return result.length > 0 ? result[0].saisonActive : '';
+  const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '', saisons: [] });
+  return settings.saisonActive;
 };
 
 export const isSaisonTerminee = (): boolean => {
   const saisonActive = getSaisonActive();
-  const result = selectQuery('SELECT terminee FROM saisons WHERE nom = ?', [saisonActive]);
-  return result.length > 0 ? Boolean(result[0].terminee) : false;
+  const saisons = getSaisons();
+  const saison = saisons.find(s => s.nom === saisonActive);
+  return saison ? saison.terminee : false;
 };
 
 export const setSaisonActive = (saisonId: string): boolean => {
   try {
-    db.run('BEGIN TRANSACTION');
+    const saisons = getSaisons();
+    const saison = saisons.find(s => s.id === saisonId);
     
-    // Désactiver toutes les saisons
-    executeQuery('UPDATE saisons SET active = 0');
-    
-    // Activer la saison sélectionnée
-    executeQuery('UPDATE saisons SET active = 1 WHERE id = ?', [saisonId]);
-    
-    // Mettre à jour les paramètres
-    const saison = selectQuery('SELECT nom FROM saisons WHERE id = ?', [saisonId]);
-    if (saison.length > 0) {
-      executeQuery('UPDATE settings SET saisonActive = ?', [saison[0].nom]);
+    if (!saison) {
+      console.error('Saison non trouvée:', saisonId);
+      return false;
     }
+
+    // Mettre à jour les saisons (désactiver toutes, activer la sélectionnée)
+    const updatedSaisons = saisons.map(s => ({
+      ...s,
+      active: s.id === saisonId
+    }));
+
+    // Mettre à jour les paramètres
+    const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '', saisons: [] });
+    const updatedSettings = {
+      ...settings,
+      saisonActive: saison.nom,
+      saisons: updatedSaisons
+    };
+
+    saveToStorage(STORAGE_KEYS.SAISONS, updatedSaisons);
+    saveToStorage(STORAGE_KEYS.SETTINGS, updatedSettings);
     
-    db.run('COMMIT');
-    saveDatabase();
+    console.log('Saison active changée:', saison.nom);
     return true;
   } catch (error) {
-    db.run('ROLLBACK');
     console.error('Erreur lors du changement de saison:', error);
     return false;
   }
@@ -328,45 +177,19 @@ export const setSaisonActive = (saisonId: string): boolean => {
 
 export const addSaison = (saison: Saison): boolean => {
   try {
-    db.run('BEGIN TRANSACTION');
+    const saisons = getSaisons();
+    const newSaisons = [...saisons, saison];
     
-    // Ajouter la nouvelle saison
-    executeQuery(
-      'INSERT INTO saisons (id, nom, dateDebut, dateFin, active, terminee) VALUES (?, ?, ?, ?, ?, ?)',
-      [saison.id, saison.nom, saison.dateDebut, saison.dateFin, saison.active ? 1 : 0, saison.terminee ? 1 : 0]
-    );
+    saveToStorage(STORAGE_KEYS.SAISONS, newSaisons);
     
-    // Copier les données de la saison précédente si elle existe
-    const saisonPrecedente = selectQuery('SELECT * FROM saisons WHERE active = 1 AND id != ?', [saison.id]);
-    if (saisonPrecedente.length > 0) {
-      const nomSaisonPrecedente = saisonPrecedente[0].nom;
-      
-      // Copier les adhérents
-      const adherents = selectQuery('SELECT * FROM adherents WHERE saison = ?', [nomSaisonPrecedente]);
-      adherents.forEach(adherent => {
-        const newId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-        executeQuery(
-          'INSERT INTO adherents (id, nom, prenom, dateNaissance, sexe, adresse, codePostal, ville, telephone, telephone2, email, email2, typeAdhesion, saison, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [newId, adherent.nom, adherent.prenom, adherent.dateNaissance, adherent.sexe, adherent.adresse, adherent.codePostal, adherent.ville, adherent.telephone, adherent.telephone2, adherent.email, adherent.email2, adherent.typeAdhesion, saison.nom, new Date().toISOString()]
-        );
-      });
-      
-      // Copier les activités
-      const activites = selectQuery('SELECT * FROM activites WHERE saison = ?', [nomSaisonPrecedente]);
-      activites.forEach(activite => {
-        const newId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-        executeQuery(
-          'INSERT INTO activites (id, nom, description, prix, saison, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
-          [newId, activite.nom, activite.description, activite.prix, saison.nom, new Date().toISOString()]
-        );
-      });
+    // Si c'est la première saison ou si elle est marquée comme active
+    if (saisons.length === 0 || saison.active) {
+      setSaisonActive(saison.id);
     }
     
-    db.run('COMMIT');
-    saveDatabase();
+    console.log('Nouvelle saison ajoutée:', saison.nom);
     return true;
   } catch (error) {
-    db.run('ROLLBACK');
     console.error('Erreur lors de l\'ajout de saison:', error);
     return false;
   }
@@ -374,16 +197,22 @@ export const addSaison = (saison: Saison): boolean => {
 
 export const updateSaison = (saison: Saison): boolean => {
   try {
-    executeQuery(
-      'UPDATE saisons SET nom = ?, dateDebut = ?, dateFin = ?, terminee = ? WHERE id = ?',
-      [saison.nom, saison.dateDebut, saison.dateFin, saison.terminee ? 1 : 0, saison.id]
-    );
+    const saisons = getSaisons();
+    const updatedSaisons = saisons.map(s => s.id === saison.id ? saison : s);
     
+    saveToStorage(STORAGE_KEYS.SAISONS, updatedSaisons);
+    
+    // Si la saison est active, mettre à jour les paramètres
     if (saison.active) {
-      executeQuery('UPDATE settings SET saisonActive = ?', [saison.nom]);
+      const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '', saisons: [] });
+      const updatedSettings = {
+        ...settings,
+        saisonActive: saison.nom
+      };
+      saveToStorage(STORAGE_KEYS.SETTINGS, updatedSettings);
     }
     
-    saveDatabase();
+    console.log('Saison mise à jour:', saison.nom);
     return true;
   } catch (error) {
     console.error('Erreur lors de la mise à jour de saison:', error);
@@ -393,28 +222,25 @@ export const updateSaison = (saison: Saison): boolean => {
 
 export const deleteSaison = (id: string): boolean => {
   try {
-    db.run('BEGIN TRANSACTION');
+    const saisons = getSaisons();
+    const saisonToDelete = saisons.find(s => s.id === id);
     
-    const saison = selectQuery('SELECT nom, active FROM saisons WHERE id = ?', [id]);
-    if (saison.length === 0 || saison[0].active) {
-      db.run('ROLLBACK');
+    if (!saisonToDelete) {
+      console.error('Saison non trouvée:', id);
       return false;
     }
     
-    const nomSaison = saison[0].nom;
+    if (saisonToDelete.active) {
+      console.error('Impossible de supprimer la saison active');
+      return false;
+    }
     
-    // Supprimer toutes les données liées
-    executeQuery('DELETE FROM adherent_activites WHERE adherentId IN (SELECT id FROM adherents WHERE saison = ?)', [nomSaison]);
-    executeQuery('DELETE FROM paiements WHERE saison = ?', [nomSaison]);
-    executeQuery('DELETE FROM adherents WHERE saison = ?', [nomSaison]);
-    executeQuery('DELETE FROM activites WHERE saison = ?', [nomSaison]);
-    executeQuery('DELETE FROM saisons WHERE id = ?', [id]);
+    const updatedSaisons = saisons.filter(s => s.id !== id);
+    saveToStorage(STORAGE_KEYS.SAISONS, updatedSaisons);
     
-    db.run('COMMIT');
-    saveDatabase();
+    console.log('Saison supprimée:', saisonToDelete.nom);
     return true;
   } catch (error) {
-    db.run('ROLLBACK');
     console.error('Erreur lors de la suppression de saison:', error);
     return false;
   }
@@ -423,88 +249,50 @@ export const deleteSaison = (id: string): boolean => {
 // Fonctions pour les adhérents
 export const getAdherents = (): Adherent[] => {
   const saisonActive = getSaisonActive();
-  const results = selectQuery('SELECT * FROM adherents WHERE saison = ? ORDER BY nom, prenom', [saisonActive]);
-  
-  return results.map(row => {
-    // Récupérer les activités de l'adhérent
-    const activites = selectQuery(
-      'SELECT activiteId FROM adherent_activites WHERE adherentId = ?',
-      [row.id]
-    ).map(a => a.activiteId);
-    
-    return {
-      id: row.id,
-      nom: row.nom,
-      prenom: row.prenom,
-      dateNaissance: row.dateNaissance,
-      sexe: row.sexe,
-      adresse: row.adresse,
-      codePostal: row.codePostal,
-      ville: row.ville,
-      telephone: row.telephone,
-      telephone2: row.telephone2 || '',
-      email: row.email,
-      email2: row.email2 || '',
-      typeAdhesion: row.typeAdhesion,
-      activites,
-      saison: row.saison,
-      createdAt: row.createdAt
-    };
-  });
+  const allAdherents = loadFromStorage<Adherent[]>(STORAGE_KEYS.ADHERENTS, []);
+  return allAdherents.filter(a => a.saison === saisonActive);
 };
 
 export const saveAdherent = (adherent: Adherent): boolean => {
-  if (isSaisonTerminee()) return false;
+  if (isSaisonTerminee()) {
+    console.error('Impossible de sauvegarder : saison terminée');
+    return false;
+  }
   
   try {
-    db.run('BEGIN TRANSACTION');
+    const allAdherents = loadFromStorage<Adherent[]>(STORAGE_KEYS.ADHERENTS, []);
+    const existingIndex = allAdherents.findIndex(a => a.id === adherent.id);
     
-    const exists = selectQuery('SELECT id FROM adherents WHERE id = ?', [adherent.id]);
-    
-    if (exists.length > 0) {
+    if (existingIndex >= 0) {
       // Mise à jour
-      executeQuery(
-        'UPDATE adherents SET nom = ?, prenom = ?, dateNaissance = ?, sexe = ?, adresse = ?, codePostal = ?, ville = ?, telephone = ?, telephone2 = ?, email = ?, email2 = ?, typeAdhesion = ? WHERE id = ?',
-        [adherent.nom, adherent.prenom, adherent.dateNaissance, adherent.sexe, adherent.adresse, adherent.codePostal, adherent.ville, adherent.telephone, adherent.telephone2 || null, adherent.email, adherent.email2 || null, adherent.typeAdhesion, adherent.id]
-      );
+      allAdherents[existingIndex] = adherent;
+      console.log('Adhérent mis à jour:', adherent.prenom, adherent.nom);
     } else {
-      // Insertion
-      executeQuery(
-        'INSERT INTO adherents (id, nom, prenom, dateNaissance, sexe, adresse, codePostal, ville, telephone, telephone2, email, email2, typeAdhesion, saison, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [adherent.id, adherent.nom, adherent.prenom, adherent.dateNaissance, adherent.sexe, adherent.adresse, adherent.codePostal, adherent.ville, adherent.telephone, adherent.telephone2 || null, adherent.email, adherent.email2 || null, adherent.typeAdhesion, adherent.saison, adherent.createdAt]
-      );
+      // Ajout
+      allAdherents.push(adherent);
+      console.log('Nouvel adhérent ajouté:', adherent.prenom, adherent.nom);
     }
     
-    // Mettre à jour les activités
-    executeQuery('DELETE FROM adherent_activites WHERE adherentId = ?', [adherent.id]);
-    adherent.activites.forEach(activiteId => {
-      executeQuery('INSERT INTO adherent_activites (adherentId, activiteId) VALUES (?, ?)', [adherent.id, activiteId]);
-    });
-    
-    db.run('COMMIT');
-    saveDatabase();
-    return true;
+    return saveToStorage(STORAGE_KEYS.ADHERENTS, allAdherents);
   } catch (error) {
-    db.run('ROLLBACK');
     console.error('Erreur lors de la sauvegarde de l\'adhérent:', error);
     return false;
   }
 };
 
 export const deleteAdherent = (id: string): boolean => {
-  if (isSaisonTerminee()) return false;
+  if (isSaisonTerminee()) {
+    console.error('Impossible de supprimer : saison terminée');
+    return false;
+  }
   
   try {
-    db.run('BEGIN TRANSACTION');
+    const allAdherents = loadFromStorage<Adherent[]>(STORAGE_KEYS.ADHERENTS, []);
+    const updatedAdherents = allAdherents.filter(a => a.id !== id);
     
-    // Les suppressions en cascade sont gérées par les contraintes FK
-    executeQuery('DELETE FROM adherents WHERE id = ?', [id]);
-    
-    db.run('COMMIT');
-    saveDatabase();
-    return true;
+    console.log('Adhérent supprimé:', id);
+    return saveToStorage(STORAGE_KEYS.ADHERENTS, updatedAdherents);
   } catch (error) {
-    db.run('ROLLBACK');
     console.error('Erreur lors de la suppression de l\'adhérent:', error);
     return false;
   }
@@ -513,78 +301,50 @@ export const deleteAdherent = (id: string): boolean => {
 // Fonctions pour les activités
 export const getActivites = (): Activite[] => {
   const saisonActive = getSaisonActive();
-  const results = selectQuery('SELECT * FROM activites WHERE saison = ? ORDER BY nom', [saisonActive]);
-  
-  return results.map(row => {
-    // Récupérer les adhérents de l'activité
-    const adherents = selectQuery(
-      'SELECT adherentId FROM adherent_activites WHERE activiteId = ?',
-      [row.id]
-    ).map(a => a.adherentId);
-    
-    return {
-      id: row.id,
-      nom: row.nom,
-      description: row.description,
-      prix: row.prix,
-      adherents,
-      saison: row.saison,
-      createdAt: row.createdAt
-    };
-  });
+  const allActivites = loadFromStorage<Activite[]>(STORAGE_KEYS.ACTIVITES, []);
+  return allActivites.filter(a => a.saison === saisonActive);
 };
 
 export const saveActivite = (activite: Activite): boolean => {
-  if (isSaisonTerminee()) return false;
+  if (isSaisonTerminee()) {
+    console.error('Impossible de sauvegarder : saison terminée');
+    return false;
+  }
   
   try {
-    db.run('BEGIN TRANSACTION');
+    const allActivites = loadFromStorage<Activite[]>(STORAGE_KEYS.ACTIVITES, []);
+    const existingIndex = allActivites.findIndex(a => a.id === activite.id);
     
-    const exists = selectQuery('SELECT id FROM activites WHERE id = ?', [activite.id]);
-    
-    if (exists.length > 0) {
+    if (existingIndex >= 0) {
       // Mise à jour
-      executeQuery(
-        'UPDATE activites SET nom = ?, description = ?, prix = ? WHERE id = ?',
-        [activite.nom, activite.description, activite.prix, activite.id]
-      );
+      allActivites[existingIndex] = activite;
+      console.log('Activité mise à jour:', activite.nom);
     } else {
-      // Insertion
-      executeQuery(
-        'INSERT INTO activites (id, nom, description, prix, saison, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
-        [activite.id, activite.nom, activite.description, activite.prix, activite.saison, activite.createdAt]
-      );
+      // Ajout
+      allActivites.push(activite);
+      console.log('Nouvelle activité ajoutée:', activite.nom);
     }
     
-    // Mettre à jour les adhérents
-    executeQuery('DELETE FROM adherent_activites WHERE activiteId = ?', [activite.id]);
-    activite.adherents.forEach(adherentId => {
-      executeQuery('INSERT INTO adherent_activites (adherentId, activiteId) VALUES (?, ?)', [adherentId, activite.id]);
-    });
-    
-    db.run('COMMIT');
-    saveDatabase();
-    return true;
+    return saveToStorage(STORAGE_KEYS.ACTIVITES, allActivites);
   } catch (error) {
-    db.run('ROLLBACK');
     console.error('Erreur lors de la sauvegarde de l\'activité:', error);
     return false;
   }
 };
 
 export const deleteActivite = (id: string): boolean => {
-  if (isSaisonTerminee()) return false;
+  if (isSaisonTerminee()) {
+    console.error('Impossible de supprimer : saison terminée');
+    return false;
+  }
   
   try {
-    db.run('BEGIN TRANSACTION');
+    const allActivites = loadFromStorage<Activite[]>(STORAGE_KEYS.ACTIVITES, []);
+    const updatedActivites = allActivites.filter(a => a.id !== id);
     
-    executeQuery('DELETE FROM activites WHERE id = ?', [id]);
-    
-    db.run('COMMIT');
-    saveDatabase();
-    return true;
+    console.log('Activité supprimée:', id);
+    return saveToStorage(STORAGE_KEYS.ACTIVITES, updatedActivites);
   } catch (error) {
-    db.run('ROLLBACK');
     console.error('Erreur lors de la suppression de l\'activité:', error);
     return false;
   }
@@ -593,41 +353,31 @@ export const deleteActivite = (id: string): boolean => {
 // Fonctions pour les paiements
 export const getPaiements = (): Paiement[] => {
   const saisonActive = getSaisonActive();
-  const results = selectQuery('SELECT * FROM paiements WHERE saison = ? ORDER BY createdAt DESC', [saisonActive]);
-  
-  return results.map(row => ({
-    id: row.id,
-    adherentId: row.adherentId,
-    activiteId: row.activiteId,
-    montant: row.montant,
-    datePaiement: row.datePaiement || '',
-    modePaiement: row.modePaiement,
-    statut: row.statut,
-    saison: row.saison,
-    createdAt: row.createdAt
-  }));
+  const allPaiements = loadFromStorage<Paiement[]>(STORAGE_KEYS.PAIEMENTS, []);
+  return allPaiements.filter(p => p.saison === saisonActive);
 };
 
 export const savePaiement = (paiement: Paiement): boolean => {
-  if (isSaisonTerminee()) return false;
+  if (isSaisonTerminee()) {
+    console.error('Impossible de sauvegarder : saison terminée');
+    return false;
+  }
   
   try {
-    const exists = selectQuery('SELECT id FROM paiements WHERE id = ?', [paiement.id]);
+    const allPaiements = loadFromStorage<Paiement[]>(STORAGE_KEYS.PAIEMENTS, []);
+    const existingIndex = allPaiements.findIndex(p => p.id === paiement.id);
     
-    if (exists.length > 0) {
-      executeQuery(
-        'UPDATE paiements SET adherentId = ?, activiteId = ?, montant = ?, datePaiement = ?, modePaiement = ?, statut = ? WHERE id = ?',
-        [paiement.adherentId, paiement.activiteId, paiement.montant, paiement.datePaiement || null, paiement.modePaiement, paiement.statut, paiement.id]
-      );
+    if (existingIndex >= 0) {
+      // Mise à jour
+      allPaiements[existingIndex] = paiement;
+      console.log('Paiement mis à jour:', paiement.id);
     } else {
-      executeQuery(
-        'INSERT INTO paiements (id, adherentId, activiteId, montant, datePaiement, modePaiement, statut, saison, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [paiement.id, paiement.adherentId, paiement.activiteId, paiement.montant, paiement.datePaiement || null, paiement.modePaiement, paiement.statut, paiement.saison, paiement.createdAt]
-      );
+      // Ajout
+      allPaiements.push(paiement);
+      console.log('Nouveau paiement ajouté:', paiement.id);
     }
     
-    saveDatabase();
-    return true;
+    return saveToStorage(STORAGE_KEYS.PAIEMENTS, allPaiements);
   } catch (error) {
     console.error('Erreur lors de la sauvegarde du paiement:', error);
     return false;
@@ -635,12 +385,17 @@ export const savePaiement = (paiement: Paiement): boolean => {
 };
 
 export const deletePaiement = (id: string): boolean => {
-  if (isSaisonTerminee()) return false;
+  if (isSaisonTerminee()) {
+    console.error('Impossible de supprimer : saison terminée');
+    return false;
+  }
   
   try {
-    executeQuery('DELETE FROM paiements WHERE id = ?', [id]);
-    saveDatabase();
-    return true;
+    const allPaiements = loadFromStorage<Paiement[]>(STORAGE_KEYS.PAIEMENTS, []);
+    const updatedPaiements = allPaiements.filter(p => p.id !== id);
+    
+    console.log('Paiement supprimé:', id);
+    return saveToStorage(STORAGE_KEYS.PAIEMENTS, updatedPaiements);
   } catch (error) {
     console.error('Erreur lors de la suppression du paiement:', error);
     return false;
@@ -649,37 +404,25 @@ export const deletePaiement = (id: string): boolean => {
 
 // Fonctions pour les tâches
 export const getTaches = (): Tache[] => {
-  const results = selectQuery('SELECT * FROM taches ORDER BY createdAt DESC');
-  
-  return results.map(row => ({
-    id: row.id,
-    nom: row.nom,
-    description: row.description,
-    dateEcheance: row.dateEcheance || '',
-    type: row.type,
-    statut: row.statut,
-    createdAt: row.createdAt
-  }));
+  return loadFromStorage<Tache[]>(STORAGE_KEYS.TACHES, []);
 };
 
 export const saveTache = (tache: Tache): boolean => {
   try {
-    const exists = selectQuery('SELECT id FROM taches WHERE id = ?', [tache.id]);
+    const allTaches = loadFromStorage<Tache[]>(STORAGE_KEYS.TACHES, []);
+    const existingIndex = allTaches.findIndex(t => t.id === tache.id);
     
-    if (exists.length > 0) {
-      executeQuery(
-        'UPDATE taches SET nom = ?, description = ?, dateEcheance = ?, type = ?, statut = ? WHERE id = ?',
-        [tache.nom, tache.description, tache.dateEcheance || null, tache.type, tache.statut, tache.id]
-      );
+    if (existingIndex >= 0) {
+      // Mise à jour
+      allTaches[existingIndex] = tache;
+      console.log('Tâche mise à jour:', tache.nom);
     } else {
-      executeQuery(
-        'INSERT INTO taches (id, nom, description, dateEcheance, type, statut, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [tache.id, tache.nom, tache.description, tache.dateEcheance || null, tache.type, tache.statut, tache.createdAt]
-      );
+      // Ajout
+      allTaches.push(tache);
+      console.log('Nouvelle tâche ajoutée:', tache.nom);
     }
     
-    saveDatabase();
-    return true;
+    return saveToStorage(STORAGE_KEYS.TACHES, allTaches);
   } catch (error) {
     console.error('Erreur lors de la sauvegarde de la tâche:', error);
     return false;
@@ -688,9 +431,11 @@ export const saveTache = (tache: Tache): boolean => {
 
 export const deleteTache = (id: string): boolean => {
   try {
-    executeQuery('DELETE FROM taches WHERE id = ?', [id]);
-    saveDatabase();
-    return true;
+    const allTaches = loadFromStorage<Tache[]>(STORAGE_KEYS.TACHES, []);
+    const updatedTaches = allTaches.filter(t => t.id !== id);
+    
+    console.log('Tâche supprimée:', id);
+    return saveToStorage(STORAGE_KEYS.TACHES, updatedTaches);
   } catch (error) {
     console.error('Erreur lors de la suppression de la tâche:', error);
     return false;
@@ -699,38 +444,25 @@ export const deleteTache = (id: string): boolean => {
 
 // Fonctions pour les événements
 export const getEvenements = (): EvenementAgenda[] => {
-  const results = selectQuery('SELECT * FROM evenements ORDER BY dateDebut');
-  
-  return results.map(row => ({
-    id: row.id,
-    titre: row.titre,
-    description: row.description,
-    dateDebut: row.dateDebut,
-    dateFin: row.dateFin,
-    lieu: row.lieu || '',
-    type: row.type,
-    createdAt: row.createdAt
-  }));
+  return loadFromStorage<EvenementAgenda[]>(STORAGE_KEYS.EVENEMENTS, []);
 };
 
 export const saveEvenement = (evenement: EvenementAgenda): boolean => {
   try {
-    const exists = selectQuery('SELECT id FROM evenements WHERE id = ?', [evenement.id]);
+    const allEvenements = loadFromStorage<EvenementAgenda[]>(STORAGE_KEYS.EVENEMENTS, []);
+    const existingIndex = allEvenements.findIndex(e => e.id === evenement.id);
     
-    if (exists.length > 0) {
-      executeQuery(
-        'UPDATE evenements SET titre = ?, description = ?, dateDebut = ?, dateFin = ?, lieu = ?, type = ? WHERE id = ?',
-        [evenement.titre, evenement.description, evenement.dateDebut, evenement.dateFin, evenement.lieu || null, evenement.type, evenement.id]
-      );
+    if (existingIndex >= 0) {
+      // Mise à jour
+      allEvenements[existingIndex] = evenement;
+      console.log('Événement mis à jour:', evenement.titre);
     } else {
-      executeQuery(
-        'INSERT INTO evenements (id, titre, description, dateDebut, dateFin, lieu, type, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [evenement.id, evenement.titre, evenement.description, evenement.dateDebut, evenement.dateFin, evenement.lieu || null, evenement.type, evenement.createdAt]
-      );
+      // Ajout
+      allEvenements.push(evenement);
+      console.log('Nouvel événement ajouté:', evenement.titre);
     }
     
-    saveDatabase();
-    return true;
+    return saveToStorage(STORAGE_KEYS.EVENEMENTS, allEvenements);
   } catch (error) {
     console.error('Erreur lors de la sauvegarde de l\'événement:', error);
     return false;
@@ -739,9 +471,11 @@ export const saveEvenement = (evenement: EvenementAgenda): boolean => {
 
 export const deleteEvenement = (id: string): boolean => {
   try {
-    executeQuery('DELETE FROM evenements WHERE id = ?', [id]);
-    saveDatabase();
-    return true;
+    const allEvenements = loadFromStorage<EvenementAgenda[]>(STORAGE_KEYS.EVENEMENTS, []);
+    const updatedEvenements = allEvenements.filter(e => e.id !== id);
+    
+    console.log('Événement supprimé:', id);
+    return saveToStorage(STORAGE_KEYS.EVENEMENTS, updatedEvenements);
   } catch (error) {
     console.error('Erreur lors de la suppression de l\'événement:', error);
     return false;
@@ -750,27 +484,25 @@ export const deleteEvenement = (id: string): boolean => {
 
 // Fonctions pour les types d'adhésion
 export const getTypesAdhesion = (): TypeAdhesion[] => {
-  const results = selectQuery('SELECT * FROM types_adhesion ORDER BY nom');
-  
-  return results.map(row => ({
-    id: row.id,
-    nom: row.nom,
-    prix: row.prix
-  }));
+  return loadFromStorage<TypeAdhesion[]>(STORAGE_KEYS.TYPES_ADHESION, []);
 };
 
 export const saveTypeAdhesion = (type: TypeAdhesion): boolean => {
   try {
-    const exists = selectQuery('SELECT id FROM types_adhesion WHERE id = ?', [type.id]);
+    const allTypes = loadFromStorage<TypeAdhesion[]>(STORAGE_KEYS.TYPES_ADHESION, []);
+    const existingIndex = allTypes.findIndex(t => t.id === type.id);
     
-    if (exists.length > 0) {
-      executeQuery('UPDATE types_adhesion SET nom = ?, prix = ? WHERE id = ?', [type.nom, type.prix, type.id]);
+    if (existingIndex >= 0) {
+      // Mise à jour
+      allTypes[existingIndex] = type;
+      console.log('Type d\'adhésion mis à jour:', type.nom);
     } else {
-      executeQuery('INSERT INTO types_adhesion (id, nom, prix) VALUES (?, ?, ?)', [type.id, type.nom, type.prix]);
+      // Ajout
+      allTypes.push(type);
+      console.log('Nouveau type d\'adhésion ajouté:', type.nom);
     }
     
-    saveDatabase();
-    return true;
+    return saveToStorage(STORAGE_KEYS.TYPES_ADHESION, allTypes);
   } catch (error) {
     console.error('Erreur lors de la sauvegarde du type d\'adhésion:', error);
     return false;
@@ -779,9 +511,11 @@ export const saveTypeAdhesion = (type: TypeAdhesion): boolean => {
 
 export const deleteTypeAdhesion = (id: string): boolean => {
   try {
-    executeQuery('DELETE FROM types_adhesion WHERE id = ?', [id]);
-    saveDatabase();
-    return true;
+    const allTypes = loadFromStorage<TypeAdhesion[]>(STORAGE_KEYS.TYPES_ADHESION, []);
+    const updatedTypes = allTypes.filter(t => t.id !== id);
+    
+    console.log('Type d\'adhésion supprimé:', id);
+    return saveToStorage(STORAGE_KEYS.TYPES_ADHESION, updatedTypes);
   } catch (error) {
     console.error('Erreur lors de la suppression du type d\'adhésion:', error);
     return false;
@@ -790,26 +524,25 @@ export const deleteTypeAdhesion = (id: string): boolean => {
 
 // Fonctions pour les modes de paiement
 export const getModesPaiement = (): ModePaiement[] => {
-  const results = selectQuery('SELECT * FROM modes_paiement ORDER BY nom');
-  
-  return results.map(row => ({
-    id: row.id,
-    nom: row.nom
-  }));
+  return loadFromStorage<ModePaiement[]>(STORAGE_KEYS.MODES_PAIEMENT, []);
 };
 
 export const saveModePaiement = (mode: ModePaiement): boolean => {
   try {
-    const exists = selectQuery('SELECT id FROM modes_paiement WHERE id = ?', [mode.id]);
+    const allModes = loadFromStorage<ModePaiement[]>(STORAGE_KEYS.MODES_PAIEMENT, []);
+    const existingIndex = allModes.findIndex(m => m.id === mode.id);
     
-    if (exists.length > 0) {
-      executeQuery('UPDATE modes_paiement SET nom = ? WHERE id = ?', [mode.nom, mode.id]);
+    if (existingIndex >= 0) {
+      // Mise à jour
+      allModes[existingIndex] = mode;
+      console.log('Mode de paiement mis à jour:', mode.nom);
     } else {
-      executeQuery('INSERT INTO modes_paiement (id, nom) VALUES (?, ?)', [mode.id, mode.nom]);
+      // Ajout
+      allModes.push(mode);
+      console.log('Nouveau mode de paiement ajouté:', mode.nom);
     }
     
-    saveDatabase();
-    return true;
+    return saveToStorage(STORAGE_KEYS.MODES_PAIEMENT, allModes);
   } catch (error) {
     console.error('Erreur lors de la sauvegarde du mode de paiement:', error);
     return false;
@@ -818,9 +551,11 @@ export const saveModePaiement = (mode: ModePaiement): boolean => {
 
 export const deleteModePaiement = (id: string): boolean => {
   try {
-    executeQuery('DELETE FROM modes_paiement WHERE id = ?', [id]);
-    saveDatabase();
-    return true;
+    const allModes = loadFromStorage<ModePaiement[]>(STORAGE_KEYS.MODES_PAIEMENT, []);
+    const updatedModes = allModes.filter(m => m.id !== id);
+    
+    console.log('Mode de paiement supprimé:', id);
+    return saveToStorage(STORAGE_KEYS.MODES_PAIEMENT, updatedModes);
   } catch (error) {
     console.error('Erreur lors de la suppression du mode de paiement:', error);
     return false;
@@ -829,27 +564,25 @@ export const deleteModePaiement = (id: string): boolean => {
 
 // Fonctions pour les types d'événement
 export const getTypesEvenement = (): TypeEvenement[] => {
-  const results = selectQuery('SELECT * FROM types_evenement ORDER BY nom');
-  
-  return results.map(row => ({
-    id: row.id,
-    nom: row.nom,
-    couleur: row.couleur
-  }));
+  return loadFromStorage<TypeEvenement[]>(STORAGE_KEYS.TYPES_EVENEMENT, []);
 };
 
 export const saveTypeEvenement = (type: TypeEvenement): boolean => {
   try {
-    const exists = selectQuery('SELECT id FROM types_evenement WHERE id = ?', [type.id]);
+    const allTypes = loadFromStorage<TypeEvenement[]>(STORAGE_KEYS.TYPES_EVENEMENT, []);
+    const existingIndex = allTypes.findIndex(t => t.id === type.id);
     
-    if (exists.length > 0) {
-      executeQuery('UPDATE types_evenement SET nom = ?, couleur = ? WHERE id = ?', [type.nom, type.couleur, type.id]);
+    if (existingIndex >= 0) {
+      // Mise à jour
+      allTypes[existingIndex] = type;
+      console.log('Type d\'événement mis à jour:', type.nom);
     } else {
-      executeQuery('INSERT INTO types_evenement (id, nom, couleur) VALUES (?, ?, ?)', [type.id, type.nom, type.couleur]);
+      // Ajout
+      allTypes.push(type);
+      console.log('Nouveau type d\'événement ajouté:', type.nom);
     }
     
-    saveDatabase();
-    return true;
+    return saveToStorage(STORAGE_KEYS.TYPES_EVENEMENT, allTypes);
   } catch (error) {
     console.error('Erreur lors de la sauvegarde du type d\'événement:', error);
     return false;
@@ -858,9 +591,11 @@ export const saveTypeEvenement = (type: TypeEvenement): boolean => {
 
 export const deleteTypeEvenement = (id: string): boolean => {
   try {
-    executeQuery('DELETE FROM types_evenement WHERE id = ?', [id]);
-    saveDatabase();
-    return true;
+    const allTypes = loadFromStorage<TypeEvenement[]>(STORAGE_KEYS.TYPES_EVENEMENT, []);
+    const updatedTypes = allTypes.filter(t => t.id !== id);
+    
+    console.log('Type d\'événement supprimé:', id);
+    return saveToStorage(STORAGE_KEYS.TYPES_EVENEMENT, updatedTypes);
   } catch (error) {
     console.error('Erreur lors de la suppression du type d\'événement:', error);
     return false;
@@ -869,17 +604,13 @@ export const deleteTypeEvenement = (id: string): boolean => {
 
 // Fonctions utilitaires
 export const getSettings = (): AppSettings => {
-  return {
-    saisonActive: getSaisonActive(),
-    saisons: getSaisons()
-  };
+  return loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '', saisons: [] });
 };
 
 export const updateSettings = (settings: AppSettings): boolean => {
   try {
-    executeQuery('UPDATE settings SET saisonActive = ?', [settings.saisonActive]);
-    saveDatabase();
-    return true;
+    console.log('Mise à jour des paramètres:', settings);
+    return saveToStorage(STORAGE_KEYS.SETTINGS, settings);
   } catch (error) {
     console.error('Erreur lors de la mise à jour des paramètres:', error);
     return false;
@@ -889,23 +620,95 @@ export const updateSettings = (settings: AppSettings): boolean => {
 // Fonction de diagnostic
 export const getDatabaseInfo = () => {
   try {
-    const tables = selectQuery("SELECT name FROM sqlite_master WHERE type='table'");
     const saisonActive = getSaisonActive();
-    const totalAdherents = selectQuery('SELECT COUNT(*) as count FROM adherents')[0]?.count || 0;
-    const totalActivites = selectQuery('SELECT COUNT(*) as count FROM activites')[0]?.count || 0;
-    const totalPaiements = selectQuery('SELECT COUNT(*) as count FROM paiements')[0]?.count || 0;
+    const adherents = getAdherents();
+    const activites = getActivites();
+    const paiements = getPaiements();
+    const taches = getTaches();
+    const evenements = getEvenements();
     
     return {
-      version: 'SQLite',
+      version: 'localStorage',
       saisonActive,
-      totalAdherents,
-      totalActivites,
-      totalPaiements,
-      tables: tables.map(t => t.name),
-      storageSize: localStorage.getItem(DB_NAME)?.length || 0
+      totalAdherents: adherents.length,
+      totalActivites: activites.length,
+      totalPaiements: paiements.length,
+      totalTaches: taches.length,
+      totalEvenements: evenements.length,
+      storageUsed: Object.keys(STORAGE_KEYS).map(key => ({
+        key,
+        size: localStorage.getItem(STORAGE_KEYS[key as keyof typeof STORAGE_KEYS])?.length || 0
+      }))
     };
   } catch (error) {
     console.error('Erreur diagnostic:', error);
     return null;
+  }
+};
+
+// Fonction pour vider complètement la base de données (utile pour les tests)
+export const clearDatabase = (): boolean => {
+  try {
+    Object.values(STORAGE_KEYS).forEach(key => {
+      localStorage.removeItem(key);
+    });
+    console.log('Base de données vidée');
+    return true;
+  } catch (error) {
+    console.error('Erreur lors du vidage de la base de données:', error);
+    return false;
+  }
+};
+
+// Fonction pour exporter toutes les données
+export const exportDatabase = (): string => {
+  try {
+    const data = {
+      adherents: loadFromStorage(STORAGE_KEYS.ADHERENTS, []),
+      activites: loadFromStorage(STORAGE_KEYS.ACTIVITES, []),
+      paiements: loadFromStorage(STORAGE_KEYS.PAIEMENTS, []),
+      taches: loadFromStorage(STORAGE_KEYS.TACHES, []),
+      evenements: loadFromStorage(STORAGE_KEYS.EVENEMENTS, []),
+      typesAdhesion: loadFromStorage(STORAGE_KEYS.TYPES_ADHESION, []),
+      modesPaiement: loadFromStorage(STORAGE_KEYS.MODES_PAIEMENT, []),
+      typesEvenement: loadFromStorage(STORAGE_KEYS.TYPES_EVENEMENT, []),
+      saisons: loadFromStorage(STORAGE_KEYS.SAISONS, []),
+      settings: loadFromStorage(STORAGE_KEYS.SETTINGS, {})
+    };
+    
+    return JSON.stringify(data, null, 2);
+  } catch (error) {
+    console.error('Erreur lors de l\'export:', error);
+    return '';
+  }
+};
+
+// Fonction pour importer des données
+export const importDatabase = (jsonData: string): boolean => {
+  try {
+    const data = JSON.parse(jsonData);
+    
+    // Valider la structure des données
+    if (!data || typeof data !== 'object') {
+      throw new Error('Format de données invalide');
+    }
+    
+    // Importer chaque type de données
+    if (data.adherents) saveToStorage(STORAGE_KEYS.ADHERENTS, data.adherents);
+    if (data.activites) saveToStorage(STORAGE_KEYS.ACTIVITES, data.activites);
+    if (data.paiements) saveToStorage(STORAGE_KEYS.PAIEMENTS, data.paiements);
+    if (data.taches) saveToStorage(STORAGE_KEYS.TACHES, data.taches);
+    if (data.evenements) saveToStorage(STORAGE_KEYS.EVENEMENTS, data.evenements);
+    if (data.typesAdhesion) saveToStorage(STORAGE_KEYS.TYPES_ADHESION, data.typesAdhesion);
+    if (data.modesPaiement) saveToStorage(STORAGE_KEYS.MODES_PAIEMENT, data.modesPaiement);
+    if (data.typesEvenement) saveToStorage(STORAGE_KEYS.TYPES_EVENEMENT, data.typesEvenement);
+    if (data.saisons) saveToStorage(STORAGE_KEYS.SAISONS, data.saisons);
+    if (data.settings) saveToStorage(STORAGE_KEYS.SETTINGS, data.settings);
+    
+    console.log('Données importées avec succès');
+    return true;
+  } catch (error) {
+    console.error('Erreur lors de l\'import:', error);
+    return false;
   }
 };
