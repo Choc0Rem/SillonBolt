@@ -16,7 +16,7 @@ import {
   saveTypeAdhesion, saveModePaiement, setSaisonActive, addSaison, updateSaison, deleteSaison, updateSettings,
   deleteAdherent, deleteActivite, deletePaiement, deleteTache, deleteEvenement,
   deleteTypeAdhesion, deleteModePaiement, isSaisonTerminee
-} from './utils/jsonDatabase';
+} from './utils/database';
 import { Adherent, Activite, Paiement, Tache, EvenementAgenda, TypeAdhesion, ModePaiement, Saison, AppSettings } from './types';
 
 function App() {

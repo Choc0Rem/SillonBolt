@@ -1,7 +1,7 @@
 import React from 'react';
 import Card from '../components/Card';
 import Button from '../components/Button';
-import { Users, Activity, CreditCard, CheckSquare, TrendingUp, AlertCircle, Clock, Flag, Calendar as CalendarIcon, MapPin } from 'lucide-react';
+import { Users, Activity, CreditCard, CheckSquare, TrendingUp, AlertCircle, Clock, Flag, Calendar as CalendarIcon, MapPin, Euro, TrendingDown } from 'lucide-react';
 import { EvenementAgenda } from '../types';
 
 interface DashboardProps {
@@ -15,6 +15,7 @@ interface DashboardProps {
 export default function Dashboard({ adherents, activites, paiements, taches, evenements }: DashboardProps) {
   const paiementsEnAttente = paiements.filter(p => p.statut === 'En attente').length;
   const totalRevenu = paiements.filter(p => p.statut === 'Payé').reduce((acc, p) => acc + p.montant, 0);
+  const totalEnAttente = paiements.filter(p => p.statut === 'En attente').reduce((acc, p) => acc + p.montant, 0);
 
   const stats = [
     {
@@ -222,6 +223,53 @@ export default function Dashboard({ adherents, activites, paiements, taches, eve
         </Card>
       </div>
 
+      {/* Barre de résumé des paiements */}
+      <Card title="Résumé des Paiements">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="flex items-center">
+            <div className="p-3 rounded-lg bg-green-100">
+              <Euro className="w-6 h-6 text-green-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Total Encaissé</p>
+              <p className="text-2xl font-bold text-green-600">{totalRevenu}€</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center">
+            <div className="p-3 rounded-lg bg-orange-100">
+              <TrendingDown className="w-6 h-6 text-orange-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">En Attente</p>
+              <p className="text-2xl font-bold text-orange-600">{totalEnAttente}€</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center">
+            <div className="p-3 rounded-lg bg-blue-100">
+              <CreditCard className="w-6 h-6 text-blue-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Total Paiements</p>
+              <p className="text-2xl font-bold text-blue-600">{paiements.length}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center">
+            <div className="p-3 rounded-lg bg-purple-100">
+              <TrendingUp className="w-6 h-6 text-purple-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Taux de Paiement</p>
+              <p className="text-2xl font-bold text-purple-600">
+                {paiements.length > 0 ? Math.round((paiements.filter(p => p.statut === 'Payé').length / paiements.length) * 100) : 0}%
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
+
       {/* Activités Populaires */}
       {activites.length > 0 && (
         <Card title="Activités les Plus Populaires">
@@ -240,26 +288,6 @@ export default function Dashboard({ adherents, activites, paiements, taches, eve
                   </div>
                 </div>
               ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Résumé des Paiements */}
-      {paiements.length > 0 && (
-        <Card title="Résumé des Paiements">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <p className="text-3xl font-bold text-green-600">{paiements.filter(p => p.statut === 'Payé').length}</p>
-              <p className="text-sm text-gray-600">Paiements effectués</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-orange-600">{paiementsEnAttente}</p>
-              <p className="text-sm text-gray-600">En attente</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-blue-600">{totalRevenu}€</p>
-              <p className="text-sm text-gray-600">Revenus totaux</p>
-            </div>
           </div>
         </Card>
       )}

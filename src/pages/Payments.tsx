@@ -3,7 +3,7 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import { Plus, Search, Edit, Trash2, Filter, CreditCard, User, Calendar, Euro, ChevronDown, ChevronRight } from 'lucide-react';
 import { Paiement, Adherent, Activite } from '../types';
-import { getSaisonActive, isSaisonTerminee } from '../utils/jsonDatabase';
+import { getSaisonActive, isSaisonTerminee } from '../utils/database';
 
 interface PaymentsProps {
   paiements: Paiement[];
@@ -113,6 +113,7 @@ export default function Payments({
     if (saisonTerminee) {
       alert('Impossible de modifier les paiements : la saison est terminée');
       return;
+    
     }
     
     setEditingPayment(paiement);

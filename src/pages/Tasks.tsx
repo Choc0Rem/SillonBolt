@@ -3,7 +3,6 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import { Plus, Search, Edit, Trash2, Filter, CheckSquare, Clock, AlertTriangle, Flag } from 'lucide-react';
 import { Tache } from '../types';
-import { getSaisonActive } from '../utils/jsonDatabase';
 
 interface TasksProps {
   taches: Tache[];
@@ -238,15 +237,6 @@ export default function Tasks({ taches, onUpdateTaches }: TasksProps) {
           Nouvelle Tâche
         </Button>
       </div>
-
-      {/* Indicateur de saison */}
-      <Card>
-        <div className="text-center py-2">
-          <p className="text-sm text-gray-600">
-            <strong>Saison active :</strong> {getSaisonActive()}
-          </p>
-        </div>
-      </Card>
 
       {/* Liste des tâches */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
