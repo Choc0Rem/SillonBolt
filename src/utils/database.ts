@@ -181,7 +181,7 @@ const insertDefaultData = async (): Promise<void> => {
   const existingSaison = selectQuery('SELECT id FROM saisons WHERE nom = ?', [saisonActive]);
   if (existingSaison.length === 0) {
     db.run(
-      'INSERT INTO saisons (id, nom, dateDebut, dateFin, active, terminee) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT OR IGNORE INTO saisons (id, nom, dateDebut, dateFin, active, terminee) VALUES (?, ?, ?, ?, ?, ?)',
       ['1', saisonActive, `${currentYear}-09-01`, `${currentYear + 1}-08-31`, 1, 0]
     );
   }
@@ -189,7 +189,7 @@ const insertDefaultData = async (): Promise<void> => {
   // Vérifier et insérer les paramètres par défaut si ils n'existent pas
   const existingSettings = selectQuery('SELECT id FROM settings LIMIT 1');
   if (existingSettings.length === 0) {
-    db.run('INSERT INTO settings (saisonActive) VALUES (?)', [saisonActive]);
+    db.run('INSERT OR IGNORE INTO settings (saisonActive) VALUES (?)', [saisonActive]);
   }
 
   // Types d'adhésion par défaut
@@ -200,7 +200,7 @@ const insertDefaultData = async (): Promise<void> => {
   typesAdhesion.forEach(([id, nom, prix]) => {
     const existing = selectQuery('SELECT id FROM types_adhesion WHERE id = ?', [id]);
     if (existing.length === 0) {
-      db.run('INSERT INTO types_adhesion (id, nom, prix) VALUES (?, ?, ?)', [id, nom, prix]);
+      db.run('INSERT OR IGNORE INTO types_adhesion (id, nom, prix) VALUES (?, ?, ?)', [id, nom, prix]);
     }
   });
 
@@ -213,7 +213,7 @@ const insertDefaultData = async (): Promise<void> => {
   modesPaiement.forEach(([id, nom]) => {
     const existing = selectQuery('SELECT id FROM modes_paiement WHERE id = ?', [id]);
     if (existing.length === 0) {
-      db.run('INSERT INTO modes_paiement (id, nom) VALUES (?, ?)', [id, nom]);
+      db.run('INSERT OR IGNORE INTO modes_paiement (id, nom) VALUES (?, ?)', [id, nom]);
     }
   });
 
@@ -226,7 +226,7 @@ const insertDefaultData = async (): Promise<void> => {
   typesEvenement.forEach(([id, nom, couleur]) => {
     const existing = selectQuery('SELECT id FROM types_evenement WHERE id = ?', [id]);
     if (existing.length === 0) {
-      db.run('INSERT INTO types_evenement (id, nom, couleur) VALUES (?, ?, ?)', [id, nom, couleur]);
+      db.run('INSERT OR IGNORE INTO types_evenement (id, nom, couleur) VALUES (?, ?, ?)', [id, nom, couleur]);
     }
   });
 
