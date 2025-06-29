@@ -78,11 +78,15 @@ export interface Saison {
   dateFin: string;
   active: boolean;
   terminee: boolean;
+  ordre: number; // Nouveau champ pour l'ordre chronologique
+  planifiee: boolean; // Nouveau champ pour indiquer si c'est une saison planifiée
 }
 
 export interface AppSettings {
   saisonActive: string;
   saisons: Saison[];
+  planificationAutomatique: boolean; // Nouveau paramètre
+  nombreSaisonsPlanifiees: number; // Nouveau paramètre
 }
 
 export interface TypeEvenement {

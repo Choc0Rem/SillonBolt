@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Card from '../components/Card';
 import Button from '../components/Button';
-import { Plus, Edit, Trash2, Settings as SettingsIcon, CreditCard, Users, Calendar, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Settings as SettingsIcon, CreditCard, Users, Calendar, CheckCircle, XCircle, AlertTriangle, RefreshCw, Trash, Clock } from 'lucide-react';
 import { TypeAdhesion, ModePaiement, Saison, AppSettings } from '../types';
 import { getSaisonActive, isSaisonTerminee } from '../utils/database';
 
@@ -16,6 +16,8 @@ interface SettingsProps {
   onAddSaison: (saison: Saison) => void;
   onUpdateSaison: (saison: Saison) => void;
   onDeleteSaison: (id: string) => void;
+  onDeleteAllSeasons: () => void;
+  onRegenerateSeasonPlanning: (nombreSaisons: number) => void;
   onUpdateSettings: (settings: AppSettings) => void;
 }
 
@@ -30,12 +32,15 @@ export default function Settings({
   onAddSaison,
   onUpdateSaison,
   onDeleteSaison,
+  onDeleteAllSeasons,
+  onRegenerateSeasonPlanning,
   onUpdateSettings
 }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<'seasons' | 'membership' | 'payment'>('seasons');
   const [showMembershipModal, setShowMembershipModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showSeasonModal, setShowSeasonModal] = useState(false);
+  const [showPlanningModal, setShowPlanningModal] = useState(false);
   const [editingMembership, setEditingMembership] = useState<TypeAdhesion | null>(null);
   const [editingPayment, setEditingPayment] = useState<ModePaiement | null>(null);
   const [editingSaison, setEditingSaison] = useState<Saison | null>(null);
@@ -54,6 +59,11 @@ export default function Settings({
     dateDebut: '',
     dateFin: '',
     terminee: false
+  });
+
+  const [planningForm, setPlanningForm] = useState({
+    nombreSaisons: settings?.nombreSaisonsPlanifiees || 5,
+    planificationAutomatique: settings?.planificationAutomatique || true
   });
 
   const saisonTerminee = isSaisonTerminee();
@@ -172,7 +182,9 @@ export default function Settings({
         dateDebut: seasonForm.dateDebut,
         dateFin: seasonForm.dateFin,
         active: false,
-        terminee: seasonForm.terminee
+        terminee: seasonForm.terminee,
+        ordre: saisons.length + 1,
+        planifiee: false
       };
       onAddSaison(newSeason);
     }
@@ -211,13 +223,57 @@ export default function Settings({
     onUpdateSaison(updatedSaison);
   };
 
+  // Gestion de la planification
+  const handlePlanningSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (settings) {
+      const updatedSettings = {
+        ...settings,
+        planificationAutomatique: planningForm.planificationAutomatique,
+        nombreSaisonsPlanifiees: planningForm.nombreSaisons
+      };
+      onUpdateSettings(updatedSettings);
+    }
+    
+    if (planningForm.planificationAutomatique) {
+      onRegenerateSeasonPlanning(planningForm.nombreSaisons);
+    }
+    
+    setShowPlanningModal(false);
+  };
+
+  const resetPlanningForm = () => {
+    setPlanningForm({
+      nombreSaisons: settings?.nombreSaisonsPlanifiees || 5,
+      planificationAutomatique: settings?.planificationAutomatique || true
+    });
+    setShowPlanningModal(false);
+  };
+
   const renderSeasonsTab = () => (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold text-gray-800">Gestion des Saisons</h3>
-        <Button onClick={() => setShowSeasonModal(true)} icon={Plus}>
-          Nouvelle Saison
-        </Button>
+        <div className="flex gap-3">
+          <Button 
+            onClick={() => setShowPlanningModal(true)} 
+            icon={RefreshCw}
+            variant="secondary"
+          >
+            Planification
+          </Button>
+          <Button 
+            onClick={onDeleteAllSeasons} 
+            icon={Trash}
+            variant="danger"
+          >
+            Supprimer Toutes
+          </Button>
+          <Button onClick={() => setShowSeasonModal(true)} icon={Plus}>
+            Nouvelle Saison
+          </Button>
+        </div>
       </div>
 
       {saisonTerminee && (
@@ -230,6 +286,33 @@ export default function Settings({
           </div>
         </Card>
       )}
+
+      {/* Informations sur la planification */}
+      <Card title="Planification Automatique">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium text-gray-800">
+                Planification automatique: {settings?.planificationAutomatique ? 'Activée' : 'Désactivée'}
+              </p>
+              <p className="text-sm text-gray-600">
+                Nombre de saisons planifiées: {settings?.nombreSaisonsPlanifiees || 5}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {settings?.planificationAutomatique ? (
+                <CheckCircle className="w-5 h-5 text-green-600" />
+              ) : (
+                <XCircle className="w-5 h-5 text-red-600" />
+              )}
+            </div>
+          </div>
+          <p className="text-sm text-gray-600">
+            La planification automatique génère les saisons futures et copie automatiquement 
+            les adhérents de la saison précédente lors du changement de saison.
+          </p>
+        </div>
+      </Card>
 
       <Card title="Saison Active">
         <div className="space-y-4">
@@ -247,7 +330,7 @@ export default function Settings({
             >
               {saisons.map(saison => (
                 <option key={saison.id} value={saison.nom}>
-                  {saison.nom} {saison.terminee ? '(Terminée)' : ''}
+                  {saison.nom} {saison.terminee ? '(Terminée)' : ''} {saison.planifiee ? '(Planifiée)' : ''}
                 </option>
               ))}
             </select>
@@ -263,16 +346,21 @@ export default function Settings({
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Ordre</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Saison</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Période</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Statut</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">État</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Type</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody>
               {saisons.map((saison) => (
                 <tr key={saison.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-4">
+                    <span className="font-medium text-gray-600">#{saison.ordre || '?'}</span>
+                  </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
                       <Calendar className="w-4 h-4 text-gray-500" />
@@ -312,6 +400,22 @@ export default function Settings({
                         </>
                       )}
                     </button>
+                  </td>
+                  <td className="py-3 px-4">
+                    <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                      saison.planifiee
+                        ? 'bg-purple-100 text-purple-800'
+                        : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {saison.planifiee ? (
+                        <>
+                          <Clock className="w-3 h-3 inline mr-1" />
+                          Planifiée
+                        </>
+                      ) : (
+                        'Créée'
+                      )}
+                    </span>
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex gap-2">
@@ -506,6 +610,68 @@ export default function Settings({
       {activeTab === 'seasons' && renderSeasonsTab()}
       {activeTab === 'membership' && renderMembershipTab()}
       {activeTab === 'payment' && renderPaymentTab()}
+
+      {/* Modal Planification */}
+      {showPlanningModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-semibold mb-4">Configuration de la Planification</h2>
+            
+            <form onSubmit={handlePlanningSubmit} className="space-y-4">
+              <div>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={planningForm.planificationAutomatique}
+                    onChange={(e) => setPlanningForm({ ...planningForm, planificationAutomatique: e.target.checked })}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">Activer la planification automatique</span>
+                </label>
+                <p className="text-xs text-gray-500 mt-1">
+                  Génère automatiquement les saisons futures et copie les adhérents
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre de saisons à planifier
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={planningForm.nombreSaisons}
+                  onChange={(e) => setPlanningForm({ ...planningForm, nombreSaisons: parseInt(e.target.value) || 5 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Nombre total de saisons à maintenir (actuelle + futures)
+                </p>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5" />
+                  <div className="text-sm text-yellow-800">
+                    <p className="font-medium">Attention :</p>
+                    <p>Cette action va régénérer toute la planification et supprimer les saisons existantes non actives.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <Button type="submit" className="flex-1">
+                  Appliquer
+                </Button>
+                <Button type="button" variant="secondary" onClick={resetPlanningForm} className="flex-1">
+                  Annuler
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal Nouvelle/Modifier Saison */}
       {showSeasonModal && (

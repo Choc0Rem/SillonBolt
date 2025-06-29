@@ -15,7 +15,8 @@ import {
   saveAdherent, saveActivite, savePaiement, saveTache, saveEvenement,
   saveTypeAdhesion, saveModePaiement, setSaisonActive, addSaison, updateSaison, deleteSaison, updateSettings,
   deleteAdherent, deleteActivite, deletePaiement, deleteTache, deleteEvenement,
-  deleteTypeAdhesion, deleteModePaiement, isSaisonTerminee, getSaisonActive
+  deleteTypeAdhesion, deleteModePaiement, isSaisonTerminee, getSaisonActive,
+  deleteAllSeasonsExceptActive, regenerateSeasonPlanning
 } from './utils/database';
 import { Adherent, Activite, Paiement, Tache, EvenementAgenda, TypeAdhesion, ModePaiement, Saison, AppSettings } from './types';
 
@@ -333,6 +334,28 @@ function App() {
     }
   };
 
+  const handleDeleteAllSeasons = () => {
+    if (confirm('Êtes-vous sûr de vouloir supprimer toutes les saisons sauf la saison active ? Cette action est irréversible.')) {
+      const success = deleteAllSeasonsExceptActive();
+      if (success) {
+        loadAllData();
+        alert('Toutes les saisons ont été supprimées sauf la saison active');
+      } else {
+        alert('Erreur lors de la suppression des saisons');
+      }
+    }
+  };
+
+  const handleRegenerateSeasonPlanning = (nombreSaisons: number) => {
+    const success = regenerateSeasonPlanning(nombreSaisons);
+    if (success) {
+      loadAllData();
+      alert(`Planification régénérée avec ${nombreSaisons} saisons`);
+    } else {
+      alert('Erreur lors de la régénération de la planification');
+    }
+  };
+
   const handleUpdateSettings = (newSettings: AppSettings) => {
     const success = updateSettings(newSettings);
     if (success) {
@@ -417,6 +440,8 @@ function App() {
             onAddSaison={handleAddSaison}
             onUpdateSaison={handleUpdateSaison}
             onDeleteSaison={handleDeleteSaison}
+            onDeleteAllSeasons={handleDeleteAllSeasons}
+            onRegenerateSeasonPlanning={handleRegenerateSeasonPlanning}
             onUpdateSettings={handleUpdateSettings}
           />
         );

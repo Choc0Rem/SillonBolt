@@ -44,6 +44,94 @@ const loadFromStorage = <T>(key: string, defaultValue: T): T => {
   }
 };
 
+// Fonction pour générer automatiquement les saisons futures
+const generateFutureSeasons = (currentYear: number, count: number): Saison[] => {
+  const seasons: Saison[] = [];
+  
+  for (let i = 0; i < count; i++) {
+    const year = currentYear + i;
+    const nextYear = year + 1;
+    const seasonName = `${year}-${nextYear}`;
+    
+    seasons.push({
+      id: `season_${year}`,
+      nom: seasonName,
+      dateDebut: `${year}-09-01`,
+      dateFin: `${nextYear}-08-31`,
+      active: i === 0, // Première saison active par défaut
+      terminee: false,
+      ordre: i + 1,
+      planifiee: i > 0 // Toutes sauf la première sont planifiées
+    });
+  }
+  
+  return seasons;
+};
+
+// Fonction pour copier les adhérents d'une saison à l'autre
+const copyAdherentsToNewSeason = (fromSeason: string, toSeason: string): boolean => {
+  try {
+    const allAdherents = loadFromStorage<Adherent[]>(STORAGE_KEYS.ADHERENTS, []);
+    const adherentsFromPreviousSeason = allAdherents.filter(a => a.saison === fromSeason);
+    
+    if (adherentsFromPreviousSeason.length === 0) {
+      console.log('Aucun adhérent à copier de la saison précédente');
+      return true;
+    }
+    
+    // Créer de nouveaux adhérents pour la nouvelle saison
+    const newAdherents = adherentsFromPreviousSeason.map(adherent => ({
+      ...adherent,
+      id: `${adherent.id}_${toSeason}`, // Nouvel ID unique
+      saison: toSeason,
+      activites: [], // Réinitialiser les activités
+      createdAt: new Date().toISOString()
+    }));
+    
+    // Ajouter les nouveaux adhérents
+    const updatedAdherents = [...allAdherents, ...newAdherents];
+    saveToStorage(STORAGE_KEYS.ADHERENTS, updatedAdherents);
+    
+    console.log(`${newAdherents.length} adhérents copiés vers la saison ${toSeason}`);
+    return true;
+  } catch (error) {
+    console.error('Erreur lors de la copie des adhérents:', error);
+    return false;
+  }
+};
+
+// Fonction pour copier les activités d'une saison à l'autre
+const copyActivitesToNewSeason = (fromSeason: string, toSeason: string): boolean => {
+  try {
+    const allActivites = loadFromStorage<Activite[]>(STORAGE_KEYS.ACTIVITES, []);
+    const activitesFromPreviousSeason = allActivites.filter(a => a.saison === fromSeason);
+    
+    if (activitesFromPreviousSeason.length === 0) {
+      console.log('Aucune activité à copier de la saison précédente');
+      return true;
+    }
+    
+    // Créer de nouvelles activités pour la nouvelle saison
+    const newActivites = activitesFromPreviousSeason.map(activite => ({
+      ...activite,
+      id: `${activite.id}_${toSeason}`, // Nouvel ID unique
+      saison: toSeason,
+      adherents: [], // Réinitialiser les adhérents
+      createdAt: new Date().toISOString()
+    }));
+    
+    // Ajouter les nouvelles activités
+    const updatedActivites = [...allActivites, ...newActivites];
+    saveToStorage(STORAGE_KEYS.ACTIVITES, updatedActivites);
+    
+    console.log(`${newActivites.length} activités copiées vers la saison ${toSeason}`);
+    return true;
+  } catch (error) {
+    console.error('Erreur lors de la copie des activités:', error);
+    return false;
+  }
+};
+
 // Initialisation de la base de données
 export const initDatabase = async (): Promise<boolean> => {
   try {
@@ -57,6 +145,8 @@ export const initDatabase = async (): Promise<boolean> => {
       await createDefaultData();
     } else {
       console.log('Base de données existante trouvée');
+      // Vérifier et mettre à jour la planification automatique
+      await updateSeasonPlanning();
     }
     
     console.log('Base de données initialisée avec succès');
@@ -70,22 +160,17 @@ export const initDatabase = async (): Promise<boolean> => {
 // Création des données par défaut
 const createDefaultData = async (): Promise<void> => {
   const currentYear = new Date().getFullYear();
-  const saisonActive = `${currentYear}-${currentYear + 1}`;
-
-  // Saison par défaut
-  const defaultSaisons: Saison[] = [{
-    id: '1',
-    nom: saisonActive,
-    dateDebut: `${currentYear}-09-01`,
-    dateFin: `${currentYear + 1}-08-31`,
-    active: true,
-    terminee: false
-  }];
+  
+  // Générer 5 saisons (actuelle + 4 futures)
+  const defaultSaisons = generateFutureSeasons(currentYear, 5);
+  const saisonActive = defaultSaisons[0].nom;
 
   // Paramètres par défaut
   const defaultSettings: AppSettings = {
     saisonActive: saisonActive,
-    saisons: defaultSaisons
+    saisons: defaultSaisons,
+    planificationAutomatique: true,
+    nombreSaisonsPlanifiees: 5
   };
 
   // Types d'adhésion par défaut
@@ -120,16 +205,66 @@ const createDefaultData = async (): Promise<void> => {
   saveToStorage(STORAGE_KEYS.TACHES, []);
   saveToStorage(STORAGE_KEYS.EVENEMENTS, []);
 
-  console.log('Données par défaut créées');
+  console.log('Données par défaut créées avec planification automatique');
+};
+
+// Mise à jour de la planification des saisons
+const updateSeasonPlanning = async (): Promise<void> => {
+  try {
+    const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
+      saisonActive: '', 
+      saisons: [],
+      planificationAutomatique: true,
+      nombreSaisonsPlanifiees: 5
+    });
+    
+    if (!settings.planificationAutomatique) {
+      return;
+    }
+    
+    const saisons = loadFromStorage<Saison[]>(STORAGE_KEYS.SAISONS, []);
+    const currentYear = new Date().getFullYear();
+    
+    // Vérifier s'il faut ajouter de nouvelles saisons
+    const maxYear = Math.max(...saisons.map(s => {
+      const year = parseInt(s.nom.split('-')[0]);
+      return isNaN(year) ? currentYear : year;
+    }));
+    
+    const yearsToAdd = (currentYear + settings.nombreSaisonsPlanifiees - 1) - maxYear;
+    
+    if (yearsToAdd > 0) {
+      const newSeasons = generateFutureSeasons(maxYear + 1, yearsToAdd);
+      const updatedSeasons = [...saisons, ...newSeasons];
+      
+      saveToStorage(STORAGE_KEYS.SAISONS, updatedSeasons);
+      console.log(`${yearsToAdd} nouvelles saisons planifiées ajoutées`);
+    }
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour de la planification:', error);
+  }
 };
 
 // Fonctions pour les saisons
 export const getSaisons = (): Saison[] => {
-  return loadFromStorage(STORAGE_KEYS.SAISONS, []);
+  const saisons = loadFromStorage<Saison[]>(STORAGE_KEYS.SAISONS, []);
+  // Trier par ordre chronologique
+  return saisons.sort((a, b) => {
+    if (a.ordre && b.ordre) {
+      return a.ordre - b.ordre;
+    }
+    // Fallback sur le nom de la saison
+    return a.nom.localeCompare(b.nom);
+  });
 };
 
 export const getSaisonActive = (): string => {
-  const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '', saisons: [] });
+  const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
+    saisonActive: '', 
+    saisons: [],
+    planificationAutomatique: true,
+    nombreSaisonsPlanifiees: 5
+  });
   return settings.saisonActive;
 };
 
@@ -150,6 +285,22 @@ export const setSaisonActive = (saisonId: string): boolean => {
       return false;
     }
 
+    // Vérifier si on passe à une saison planifiée
+    if (saison.planifiee) {
+      // Trouver la saison précédente
+      const currentSaisons = saisons.filter(s => !s.planifiee);
+      const previousSeason = currentSaisons.find(s => s.active);
+      
+      if (previousSeason) {
+        // Copier les données de la saison précédente
+        copyAdherentsToNewSeason(previousSeason.nom, saison.nom);
+        copyActivitesToNewSeason(previousSeason.nom, saison.nom);
+        
+        // Marquer la saison comme non planifiée
+        saison.planifiee = false;
+      }
+    }
+
     // Mettre à jour les saisons (désactiver toutes, activer la sélectionnée)
     const updatedSaisons = saisons.map(s => ({
       ...s,
@@ -157,7 +308,12 @@ export const setSaisonActive = (saisonId: string): boolean => {
     }));
 
     // Mettre à jour les paramètres
-    const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '', saisons: [] });
+    const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
+      saisonActive: '', 
+      saisons: [],
+      planificationAutomatique: true,
+      nombreSaisonsPlanifiees: 5
+    });
     const updatedSettings = {
       ...settings,
       saisonActive: saison.nom,
@@ -178,6 +334,11 @@ export const setSaisonActive = (saisonId: string): boolean => {
 export const addSaison = (saison: Saison): boolean => {
   try {
     const saisons = getSaisons();
+    
+    // Déterminer l'ordre automatiquement
+    const maxOrdre = Math.max(...saisons.map(s => s.ordre || 0), 0);
+    saison.ordre = maxOrdre + 1;
+    
     const newSaisons = [...saisons, saison];
     
     saveToStorage(STORAGE_KEYS.SAISONS, newSaisons);
@@ -204,7 +365,12 @@ export const updateSaison = (saison: Saison): boolean => {
     
     // Si la saison est active, mettre à jour les paramètres
     if (saison.active) {
-      const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '', saisons: [] });
+      const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
+        saisonActive: '', 
+        saisons: [],
+        planificationAutomatique: true,
+        nombreSaisonsPlanifiees: 5
+      });
       const updatedSettings = {
         ...settings,
         saisonActive: saison.nom
@@ -235,13 +401,114 @@ export const deleteSaison = (id: string): boolean => {
       return false;
     }
     
+    // Supprimer toutes les données liées à cette saison
+    const allAdherents = loadFromStorage<Adherent[]>(STORAGE_KEYS.ADHERENTS, []);
+    const allActivites = loadFromStorage<Activite[]>(STORAGE_KEYS.ACTIVITES, []);
+    const allPaiements = loadFromStorage<Paiement[]>(STORAGE_KEYS.PAIEMENTS, []);
+    
+    const updatedAdherents = allAdherents.filter(a => a.saison !== saisonToDelete.nom);
+    const updatedActivites = allActivites.filter(a => a.saison !== saisonToDelete.nom);
+    const updatedPaiements = allPaiements.filter(p => p.saison !== saisonToDelete.nom);
+    
+    saveToStorage(STORAGE_KEYS.ADHERENTS, updatedAdherents);
+    saveToStorage(STORAGE_KEYS.ACTIVITES, updatedActivites);
+    saveToStorage(STORAGE_KEYS.PAIEMENTS, updatedPaiements);
+    
+    // Supprimer la saison
     const updatedSaisons = saisons.filter(s => s.id !== id);
     saveToStorage(STORAGE_KEYS.SAISONS, updatedSaisons);
     
-    console.log('Saison supprimée:', saisonToDelete.nom);
+    console.log('Saison et toutes ses données supprimées:', saisonToDelete.nom);
     return true;
   } catch (error) {
     console.error('Erreur lors de la suppression de saison:', error);
+    return false;
+  }
+};
+
+// Fonction pour supprimer toutes les saisons (sauf l'active)
+export const deleteAllSeasonsExceptActive = (): boolean => {
+  try {
+    const saisons = getSaisons();
+    const saisonActive = getSaisonActive();
+    
+    // Garder seulement la saison active
+    const activeSeason = saisons.find(s => s.nom === saisonActive);
+    if (!activeSeason) {
+      console.error('Saison active non trouvée');
+      return false;
+    }
+    
+    // Supprimer toutes les données des autres saisons
+    const allAdherents = loadFromStorage<Adherent[]>(STORAGE_KEYS.ADHERENTS, []);
+    const allActivites = loadFromStorage<Activite[]>(STORAGE_KEYS.ACTIVITES, []);
+    const allPaiements = loadFromStorage<Paiement[]>(STORAGE_KEYS.PAIEMENTS, []);
+    
+    const updatedAdherents = allAdherents.filter(a => a.saison === saisonActive);
+    const updatedActivites = allActivites.filter(a => a.saison === saisonActive);
+    const updatedPaiements = allPaiements.filter(p => p.saison === saisonActive);
+    
+    saveToStorage(STORAGE_KEYS.ADHERENTS, updatedAdherents);
+    saveToStorage(STORAGE_KEYS.ACTIVITES, updatedActivites);
+    saveToStorage(STORAGE_KEYS.PAIEMENTS, updatedPaiements);
+    
+    // Garder seulement la saison active
+    const updatedSaisons = [activeSeason];
+    saveToStorage(STORAGE_KEYS.SAISONS, updatedSaisons);
+    
+    console.log('Toutes les saisons supprimées sauf la saison active');
+    return true;
+  } catch (error) {
+    console.error('Erreur lors de la suppression de toutes les saisons:', error);
+    return false;
+  }
+};
+
+// Fonction pour régénérer la planification automatique
+export const regenerateSeasonPlanning = (nombreSaisons: number): boolean => {
+  try {
+    const saisons = getSaisons();
+    const saisonActive = getSaisonActive();
+    
+    // Garder seulement la saison active
+    const activeSeason = saisons.find(s => s.nom === saisonActive);
+    if (!activeSeason) {
+      console.error('Saison active non trouvée');
+      return false;
+    }
+    
+    // Extraire l'année de la saison active
+    const activeYear = parseInt(activeSeason.nom.split('-')[0]);
+    
+    // Générer les nouvelles saisons à partir de l'année suivante
+    const newSeasons = generateFutureSeasons(activeYear + 1, nombreSaisons - 1);
+    
+    // Combiner la saison active avec les nouvelles saisons
+    const allSeasons = [
+      { ...activeSeason, ordre: 1, planifiee: false },
+      ...newSeasons.map((s, index) => ({ ...s, ordre: index + 2 }))
+    ];
+    
+    saveToStorage(STORAGE_KEYS.SAISONS, allSeasons);
+    
+    // Mettre à jour les paramètres
+    const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
+      saisonActive: '', 
+      saisons: [],
+      planificationAutomatique: true,
+      nombreSaisonsPlanifiees: 5
+    });
+    const updatedSettings = {
+      ...settings,
+      nombreSaisonsPlanifiees: nombreSaisons,
+      saisons: allSeasons
+    };
+    saveToStorage(STORAGE_KEYS.SETTINGS, updatedSettings);
+    
+    console.log(`Planification régénérée avec ${nombreSaisons} saisons`);
+    return true;
+  } catch (error) {
+    console.error('Erreur lors de la régénération de la planification:', error);
     return false;
   }
 };
@@ -604,7 +871,12 @@ export const deleteTypeEvenement = (id: string): boolean => {
 
 // Fonctions utilitaires
 export const getSettings = (): AppSettings => {
-  return loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '', saisons: [] });
+  return loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
+    saisonActive: '', 
+    saisons: [],
+    planificationAutomatique: true,
+    nombreSaisonsPlanifiees: 5
+  });
 };
 
 export const updateSettings = (settings: AppSettings): boolean => {
