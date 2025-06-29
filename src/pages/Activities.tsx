@@ -3,7 +3,7 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import { Plus, Search, Edit, Trash2, Users } from 'lucide-react';
 import { Activite, Adherent } from '../types';
-import { getSaisonActive } from '../utils/database';
+import { getSaisonActive } from '../utils/jsonDatabase';
 
 interface ActivitiesProps {
   activites: Activite[];

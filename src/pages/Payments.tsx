@@ -3,7 +3,7 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import { Plus, Search, Edit, Trash2, Filter, CreditCard, User, Calendar, Euro, ChevronDown, ChevronRight } from 'lucide-react';
 import { Paiement, Adherent, Activite } from '../types';
-import { getSaisonActive, isSaisonTerminee } from '../utils/database';
+import { getSaisonActive, isSaisonTerminee } from '../utils/jsonDatabase';
 
 interface PaymentsProps {
   paiements: Paiement[];

@@ -3,7 +3,7 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, MapPin, Edit, Trash2, Settings } from 'lucide-react';
 import { EvenementAgenda, TypeEvenement } from '../types';
-import { getTypesEvenement, saveTypeEvenement, deleteTypeEvenement } from '../utils/database';
+import { getTypesEvenement, saveTypeEvenement, deleteTypeEvenement } from '../utils/jsonDatabase';
 
 interface CalendarProps {
   evenements: EvenementAgenda[];

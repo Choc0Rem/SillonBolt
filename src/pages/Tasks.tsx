@@ -3,7 +3,7 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import { Plus, Search, Edit, Trash2, Filter, CheckSquare, Clock, AlertTriangle, Flag } from 'lucide-react';
 import { Tache } from '../types';
-import { getSaisonActive } from '../utils/database';
+import { getSaisonActive } from '../utils/jsonDatabase';
 
 interface TasksProps {
   taches: Tache[];
@@ -41,8 +41,7 @@ export default function Tasks({ taches, onUpdateTaches }: TasksProps) {
     if (editingTask) {
       const updatedTache = {
         ...editingTask,
-        ...formData,
-        saison: editingTask.saison
+        ...formData
       };
       const updatedTaches = taches.map(t =>
         t.id === editingTask.id ? updatedTache : t
@@ -52,7 +51,6 @@ export default function Tasks({ taches, onUpdateTaches }: TasksProps) {
       const newTache: Tache = {
         id: Date.now().toString(),
         ...formData,
-        saison: getSaisonActive(),
         createdAt: new Date().toISOString()
       };
       onUpdateTaches([...taches, newTache]);

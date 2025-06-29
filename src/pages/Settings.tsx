@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import Card from '../components/Card';
 import Button from '../components/Button';
-import { Plus, Edit, Trash2, Settings as SettingsIcon, CreditCard, Users, Calendar, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Settings as SettingsIcon, CreditCard, Users, Calendar, CheckCircle, XCircle, Download, Upload } from 'lucide-react';
 import { TypeAdhesion, ModePaiement, Saison, AppSettings } from '../types';
-import { getSaisonActive, isSaisonTerminee } from '../utils/database';
+import { getSaisonActive, isSaisonTerminee, exportToFile, importFromFile } from '../utils/jsonDatabase';
 
 interface SettingsProps {
   typesAdhesion: TypeAdhesion[];
@@ -32,7 +32,7 @@ export default function Settings({
   onDeleteSaison,
   onUpdateSettings
 }: SettingsProps) {
-  const [activeTab, setActiveTab] = useState<'seasons' | 'membership' | 'payment'>('seasons');
+  const [activeTab, setActiveTab] = useState<'seasons' | 'membership' | 'payment' | 'data'>('seasons');
   const [showMembershipModal, setShowMembershipModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showSeasonModal, setShowSeasonModal] = useState(false);
@@ -209,6 +209,27 @@ export default function Settings({
   const handleToggleTerminee = (saison: Saison) => {
     const updatedSaison = { ...saison, terminee: !saison.terminee };
     onUpdateSaison(updatedSaison);
+  };
+
+  // Gestion de l'import/export
+  const handleExport = () => {
+    exportToFile();
+  };
+
+  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      importFromFile(file).then(success => {
+        if (success) {
+          alert('Données importées avec succès !');
+          window.location.reload(); // Recharger la page pour voir les nouvelles données
+        } else {
+          alert('Erreur lors de l\'import des données');
+        }
+      });
+    }
+    // Reset input
+    event.target.value = '';
   };
 
   const renderSeasonsTab = () => (
@@ -458,6 +479,60 @@ export default function Settings({
     </div>
   );
 
+  const renderDataTab = () => (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold text-gray-800">Gestion des Données</h3>
+      </div>
+
+      <Card title="Sauvegarde et Restauration">
+        <div className="space-y-4">
+          <div className="p-4 bg-blue-50 rounded-lg">
+            <h4 className="font-medium text-blue-900 mb-2">Exporter les données</h4>
+            <p className="text-sm text-blue-700 mb-3">
+              Téléchargez toutes vos données dans un fichier JSON pour les sauvegarder ou les transférer.
+            </p>
+            <Button onClick={handleExport} icon={Download} variant="secondary">
+              Exporter les données
+            </Button>
+          </div>
+
+          <div className="p-4 bg-orange-50 rounded-lg">
+            <h4 className="font-medium text-orange-900 mb-2">Importer les données</h4>
+            <p className="text-sm text-orange-700 mb-3">
+              Restaurez vos données à partir d'un fichier JSON précédemment exporté.
+              <strong> Attention : cela remplacera toutes les données actuelles.</strong>
+            </p>
+            <div className="flex items-center gap-3">
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleImport}
+                className="hidden"
+                id="import-file"
+              />
+              <label htmlFor="import-file">
+                <Button as="span" icon={Upload} variant="warning">
+                  Importer les données
+                </Button>
+              </label>
+            </div>
+          </div>
+
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <h4 className="font-medium text-gray-900 mb-2">Informations</h4>
+            <div className="text-sm text-gray-600 space-y-1">
+              <p>• Les données sont automatiquement sauvegardées dans votre navigateur</p>
+              <p>• L'export crée un fichier JSON avec toutes vos données</p>
+              <p>• L'import remplace complètement les données existantes</p>
+              <p>• Effectuez régulièrement des exports pour sauvegarder vos données</p>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {/* Header avec onglets */}
@@ -500,12 +575,24 @@ export default function Settings({
           <CreditCard className="w-4 h-4 inline mr-2" />
           Paiements
         </button>
+        <button
+          onClick={() => setActiveTab('data')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            activeTab === 'data'
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-gray-600 hover:text-gray-800'
+          }`}
+        >
+          <Download className="w-4 h-4 inline mr-2" />
+          Données
+        </button>
       </div>
 
       {/* Contenu des onglets */}
       {activeTab === 'seasons' && renderSeasonsTab()}
       {activeTab === 'membership' && renderMembershipTab()}
       {activeTab === 'payment' && renderPaymentTab()}
+      {activeTab === 'data' && renderDataTab()}
 
       {/* Modal Nouvelle/Modifier Saison */}
       {showSeasonModal && (
