@@ -29,7 +29,10 @@ export default function Activities({ activites, adherents, onUpdateActivites }: 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('Soumission formulaire activité:', formData);
+    
     if (editingActivity) {
+      console.log('Modification activité existante:', editingActivity.id);
       const updatedActivite = {
         ...editingActivity,
         ...formData,
@@ -40,6 +43,7 @@ export default function Activities({ activites, adherents, onUpdateActivites }: 
       );
       onUpdateActivites(updatedActivites);
     } else {
+      console.log('Création nouvelle activité');
       const newActivite: Activite = {
         id: Date.now().toString(),
         ...formData,
@@ -47,7 +51,11 @@ export default function Activities({ activites, adherents, onUpdateActivites }: 
         saison: getSaisonActive(),
         createdAt: new Date().toISOString()
       };
-      onUpdateActivites([...activites, newActivite]);
+      
+      console.log('Nouvelle activité créée:', newActivite);
+      
+      const updatedActivites = [...activites, newActivite];
+      onUpdateActivites(updatedActivites);
     }
     
     resetForm();
@@ -71,7 +79,8 @@ export default function Activities({ activites, adherents, onUpdateActivites }: 
 
   const handleDelete = (id: string) => {
     if (confirm('Êtes-vous sûr de vouloir supprimer cette activité ?')) {
-      onUpdateActivites(activites.filter(a => a.id !== id));
+      const updatedActivites = activites.filter(a => a.id !== id);
+      onUpdateActivites(updatedActivites);
     }
   };
 

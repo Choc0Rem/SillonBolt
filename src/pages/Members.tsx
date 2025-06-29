@@ -50,6 +50,8 @@ export default function Members({ adherents, activites, onUpdateAdherents, onUpd
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('Soumission formulaire adhérent:', formData);
+    
     // Validation des champs requis
     if (!formData.nom.trim() || !formData.prenom.trim() || !formData.email.trim()) {
       alert('Veuillez remplir tous les champs obligatoires');
@@ -70,11 +72,14 @@ export default function Members({ adherents, activites, onUpdateAdherents, onUpd
     }
 
     if (editingMember) {
+      console.log('Modification adhérent existant:', editingMember.id);
       const updatedAdherent = {
         ...editingMember,
         ...formData,
         saison: editingMember.saison
       };
+      
+      // Mettre à jour dans la liste existante
       const updatedAdherents = adherents.map(a =>
         a.id === editingMember.id ? updatedAdherent : a
       );
@@ -89,13 +94,19 @@ export default function Members({ adherents, activites, onUpdateAdherents, onUpd
       }));
       onUpdateActivites(updatedActivites);
     } else {
+      console.log('Création nouvel adhérent');
       const newAdherent: Adherent = {
         id: Date.now().toString(),
         ...formData,
         saison: getSaisonActive(),
         createdAt: new Date().toISOString()
       };
-      onUpdateAdherents([...adherents, newAdherent]);
+      
+      console.log('Nouvel adhérent créé:', newAdherent);
+      
+      // Ajouter à la liste existante
+      const updatedAdherents = [...adherents, newAdherent];
+      onUpdateAdherents(updatedAdherents);
       
       // Mettre à jour les activités
       const updatedActivites = activites.map(activite => ({
@@ -154,7 +165,8 @@ export default function Members({ adherents, activites, onUpdateAdherents, onUpd
 
   const handleDelete = (id: string) => {
     if (confirm('Êtes-vous sûr de vouloir supprimer cet adhérent ?')) {
-      onUpdateAdherents(adherents.filter(a => a.id !== id));
+      const updatedAdherents = adherents.filter(a => a.id !== id);
+      onUpdateAdherents(updatedAdherents);
       
       // Supprimer l'adhérent des activités
       const updatedActivites = activites.map(activite => ({

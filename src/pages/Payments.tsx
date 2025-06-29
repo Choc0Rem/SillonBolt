@@ -68,12 +68,15 @@ export default function Payments({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('Soumission formulaire paiement:', formData);
+    
     if (saisonTerminee) {
       alert('Impossible de modifier les paiements : la saison est terminée');
       return;
     }
     
     if (editingPayment) {
+      console.log('Modification paiement existant:', editingPayment.id);
       const updatedPaiement = {
         ...editingPayment,
         ...formData,
@@ -84,13 +87,18 @@ export default function Payments({
       );
       onUpdatePaiements(updatedPaiements);
     } else {
+      console.log('Création nouveau paiement');
       const newPaiement: Paiement = {
         id: Date.now().toString(),
         ...formData,
         saison: getSaisonActive(),
         createdAt: new Date().toISOString()
       };
-      onUpdatePaiements([...paiements, newPaiement]);
+      
+      console.log('Nouveau paiement créé:', newPaiement);
+      
+      const updatedPaiements = [...paiements, newPaiement];
+      onUpdatePaiements(updatedPaiements);
     }
     
     resetForm();
@@ -113,7 +121,6 @@ export default function Payments({
     if (saisonTerminee) {
       alert('Impossible de modifier les paiements : la saison est terminée');
       return;
-    
     }
     
     setEditingPayment(paiement);
@@ -135,7 +142,8 @@ export default function Payments({
     }
     
     if (confirm('Êtes-vous sûr de vouloir supprimer ce paiement ?')) {
-      onUpdatePaiements(paiements.filter(p => p.id !== id));
+      const updatedPaiements = paiements.filter(p => p.id !== id);
+      onUpdatePaiements(updatedPaiements);
     }
   };
 
