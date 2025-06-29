@@ -4,6 +4,7 @@ import { Adherent, Activite, Paiement, Tache, EvenementAgenda, TypeAdhesion, Mod
 // Variables globales
 let SQL: any = null;
 let db: any = null;
+let isDbInitialized = false; // Flag pour éviter les initialisations multiples
 const DB_NAME = 'association_database.db';
 
 // Initialisation de SQLite
@@ -11,23 +12,38 @@ export const initDatabase = async (): Promise<boolean> => {
   try {
     console.log('🔄 Début initialisation SQLite...');
     
+    // Vérifier si la base est déjà initialisée
+    if (isDbInitialized && db) {
+      console.log('✅ Base de données déjà initialisée, réutilisation');
+      return true;
+    }
+    
     // Charger SQL.js
-    SQL = await initSqlJs({
-      locateFile: (file: string) => `https://sql.js.org/dist/${file}`
-    });
-    console.log('✅ SQL.js chargé avec succès');
+    if (!SQL) {
+      SQL = await initSqlJs({
+        locateFile: (file: string) => `https://sql.js.org/dist/${file}`
+      });
+      console.log('✅ SQL.js chargé avec succès');
+    }
 
-    // Toujours créer une nouvelle base pour éviter les problèmes de corruption
-    console.log('🆕 Création d\'une nouvelle base de données...');
-    db = new SQL.Database();
-    await createTables();
-    await insertDefaultData();
-    console.log('✅ Nouvelle base de données créée et initialisée');
+    // Créer une nouvelle base seulement si pas déjà fait
+    if (!db) {
+      console.log('🆕 Création d\'une nouvelle base de données...');
+      db = new SQL.Database();
+      await createTables();
+      await insertDefaultData();
+      console.log('✅ Nouvelle base de données créée et initialisée');
+    }
 
+    // Marquer comme initialisé
+    isDbInitialized = true;
     console.log('✅ Base de données SQLite initialisée avec succès');
     return true;
   } catch (error) {
     console.error('❌ Erreur lors de l\'initialisation de la base de données:', error);
+    // Réinitialiser les flags en cas d'erreur
+    isDbInitialized = false;
+    db = null;
     return false;
   }
 };
@@ -167,6 +183,13 @@ const insertDefaultData = async (): Promise<void> => {
   const saisonActive = `${currentYear}-${currentYear + 1}`;
 
   try {
+    // Vérifier si les données par défaut existent déjà
+    const existingSaison = selectQuery('SELECT id FROM saisons WHERE id = ?', ['1']);
+    if (existingSaison.length > 0) {
+      console.log('✅ Données par défaut déjà présentes, pas d\'insertion');
+      return;
+    }
+
     // Saison par défaut
     db.run(
       'INSERT INTO saisons (id, nom, dateDebut, dateFin, active, terminee) VALUES (?, ?, ?, ?, ?, ?)',
