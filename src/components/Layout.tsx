@@ -7,8 +7,7 @@ import {
   BarChart3, 
   Calendar, 
   CheckSquare, 
-  Settings,
-  Building2
+  Settings
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -35,14 +34,31 @@ export default function Layout({ children, currentPage, onPageChange }: LayoutPr
       <div className="w-64 bg-white shadow-lg">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0">
+              <img 
+                src="/images.jpg" 
+                alt="Le Sillon Boulange" 
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  // Fallback en cas d'erreur de chargement
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const fallback = target.nextElementSibling as HTMLElement;
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+              <div 
+                className="w-full h-full bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-lg"
+                style={{ display: 'none' }}
+              >
+                LS
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-800">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl font-bold text-gray-800 truncate">
                 Le Sillon
               </h1>
-              <p className="text-xs text-gray-500">Boulange</p>
+              <p className="text-xs text-gray-500 truncate">Boulange</p>
             </div>
           </div>
         </div>
