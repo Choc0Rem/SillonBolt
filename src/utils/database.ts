@@ -1,4 +1,4 @@
-// Système de base de données simple utilisant localStorage
+// Système de base de données optimisé utilisant localStorage
 import { Adherent, Activite, Paiement, Tache, EvenementAgenda, TypeAdhesion, ModePaiement, Saison, AppSettings, TypeEvenement } from '../types';
 
 // Clés pour localStorage
@@ -15,11 +15,18 @@ const STORAGE_KEYS = {
   SETTINGS: 'association_settings'
 };
 
-// Fonction utilitaire pour sauvegarder dans localStorage
+// Cache en mémoire pour optimiser les performances
+let cache: { [key: string]: any } = {};
+let cacheTimestamp: { [key: string]: number } = {};
+const CACHE_DURATION = 5000; // 5 secondes
+
+// Fonction utilitaire pour sauvegarder dans localStorage avec cache
 const saveToStorage = (key: string, data: any): boolean => {
   try {
     localStorage.setItem(key, JSON.stringify(data));
-    console.log(`Données sauvegardées: ${key}`, data);
+    // Mettre à jour le cache
+    cache[key] = data;
+    cacheTimestamp[key] = Date.now();
     return true;
   } catch (error) {
     console.error(`Erreur lors de la sauvegarde ${key}:`, error);
@@ -27,16 +34,22 @@ const saveToStorage = (key: string, data: any): boolean => {
   }
 };
 
-// Fonction utilitaire pour charger depuis localStorage
+// Fonction utilitaire pour charger depuis localStorage avec cache
 const loadFromStorage = <T>(key: string, defaultValue: T): T => {
   try {
+    // Vérifier le cache d'abord
+    if (cache[key] && cacheTimestamp[key] && (Date.now() - cacheTimestamp[key] < CACHE_DURATION)) {
+      return cache[key];
+    }
+
     const stored = localStorage.getItem(key);
     if (stored) {
       const parsed = JSON.parse(stored);
-      console.log(`Données chargées: ${key}`, parsed);
+      // Mettre à jour le cache
+      cache[key] = parsed;
+      cacheTimestamp[key] = Date.now();
       return parsed;
     }
-    console.log(`Aucune donnée trouvée pour ${key}, utilisation des valeurs par défaut`);
     return defaultValue;
   } catch (error) {
     console.error(`Erreur lors du chargement ${key}:`, error);
@@ -44,45 +57,45 @@ const loadFromStorage = <T>(key: string, defaultValue: T): T => {
   }
 };
 
-// Fonction pour générer automatiquement les saisons futures
-const generateFutureSeasons = (currentYear: number, count: number): Saison[] => {
-  const seasons: Saison[] = [];
+// Fonction pour invalider le cache
+const invalidateCache = (key?: string) => {
+  if (key) {
+    delete cache[key];
+    delete cacheTimestamp[key];
+  } else {
+    cache = {};
+    cacheTimestamp = {};
+  }
+};
+
+// Générer les options de saisons (années scolaires)
+const generateSeasonOptions = (): string[] => {
+  const currentYear = new Date().getFullYear();
+  const seasons = [];
   
-  for (let i = 0; i < count; i++) {
+  // Générer 10 années scolaires (5 passées, actuelle, 4 futures)
+  for (let i = -5; i <= 4; i++) {
     const year = currentYear + i;
-    const nextYear = year + 1;
-    const seasonName = `${year}-${nextYear}`;
-    
-    seasons.push({
-      id: `season_${year}`,
-      nom: seasonName,
-      dateDebut: `${year}-09-01`,
-      dateFin: `${nextYear}-08-31`,
-      active: i === 0, // Première saison active par défaut
-      terminee: false,
-      ordre: i + 1,
-      planifiee: i > 0 // Toutes sauf la première sont planifiées
-    });
+    seasons.push(`${year}-${year + 1}`);
   }
   
   return seasons;
 };
 
-// Fonction pour copier les adhérents d'une saison à l'autre
+// Copier les adhérents d'une saison à l'autre
 const copyAdherentsToNewSeason = (fromSeason: string, toSeason: string): boolean => {
   try {
     const allAdherents = loadFromStorage<Adherent[]>(STORAGE_KEYS.ADHERENTS, []);
     const adherentsFromPreviousSeason = allAdherents.filter(a => a.saison === fromSeason);
     
     if (adherentsFromPreviousSeason.length === 0) {
-      console.log('Aucun adhérent à copier de la saison précédente');
       return true;
     }
     
     // Créer de nouveaux adhérents pour la nouvelle saison
     const newAdherents = adherentsFromPreviousSeason.map(adherent => ({
       ...adherent,
-      id: `${adherent.id}_${toSeason}`, // Nouvel ID unique
+      id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Nouvel ID unique
       saison: toSeason,
       activites: [], // Réinitialiser les activités
       createdAt: new Date().toISOString()
@@ -100,21 +113,20 @@ const copyAdherentsToNewSeason = (fromSeason: string, toSeason: string): boolean
   }
 };
 
-// Fonction pour copier les activités d'une saison à l'autre
+// Copier les activités d'une saison à l'autre
 const copyActivitesToNewSeason = (fromSeason: string, toSeason: string): boolean => {
   try {
     const allActivites = loadFromStorage<Activite[]>(STORAGE_KEYS.ACTIVITES, []);
     const activitesFromPreviousSeason = allActivites.filter(a => a.saison === fromSeason);
     
     if (activitesFromPreviousSeason.length === 0) {
-      console.log('Aucune activité à copier de la saison précédente');
       return true;
     }
     
     // Créer de nouvelles activités pour la nouvelle saison
     const newActivites = activitesFromPreviousSeason.map(activite => ({
       ...activite,
-      id: `${activite.id}_${toSeason}`, // Nouvel ID unique
+      id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Nouvel ID unique
       saison: toSeason,
       adherents: [], // Réinitialiser les adhérents
       createdAt: new Date().toISOString()
@@ -143,10 +155,6 @@ export const initDatabase = async (): Promise<boolean> => {
     if (!existingSettings) {
       console.log('Première initialisation - création des données par défaut');
       await createDefaultData();
-    } else {
-      console.log('Base de données existante trouvée');
-      // Vérifier et mettre à jour la planification automatique
-      await updateSeasonPlanning();
     }
     
     console.log('Base de données initialisée avec succès');
@@ -160,17 +168,21 @@ export const initDatabase = async (): Promise<boolean> => {
 // Création des données par défaut
 const createDefaultData = async (): Promise<void> => {
   const currentYear = new Date().getFullYear();
-  
-  // Générer 5 saisons (actuelle + 4 futures)
-  const defaultSaisons = generateFutureSeasons(currentYear, 5);
-  const saisonActive = defaultSaisons[0].nom;
+  const currentSeason = `${currentYear}-${currentYear + 1}`;
+
+  // Saison par défaut
+  const defaultSaison: Saison = {
+    id: `season_${currentYear}`,
+    nom: currentSeason,
+    dateDebut: `${currentYear}-09-01`,
+    dateFin: `${currentYear + 1}-08-31`,
+    active: true,
+    terminee: false
+  };
 
   // Paramètres par défaut
   const defaultSettings: AppSettings = {
-    saisonActive: saisonActive,
-    saisons: defaultSaisons,
-    planificationAutomatique: true,
-    nombreSaisonsPlanifiees: 5
+    saisonActive: currentSeason
   };
 
   // Types d'adhésion par défaut
@@ -194,7 +206,7 @@ const createDefaultData = async (): Promise<void> => {
   ];
 
   // Sauvegarder toutes les données par défaut
-  saveToStorage(STORAGE_KEYS.SAISONS, defaultSaisons);
+  saveToStorage(STORAGE_KEYS.SAISONS, [defaultSaison]);
   saveToStorage(STORAGE_KEYS.SETTINGS, defaultSettings);
   saveToStorage(STORAGE_KEYS.TYPES_ADHESION, defaultTypesAdhesion);
   saveToStorage(STORAGE_KEYS.MODES_PAIEMENT, defaultModesPaiement);
@@ -205,66 +217,20 @@ const createDefaultData = async (): Promise<void> => {
   saveToStorage(STORAGE_KEYS.TACHES, []);
   saveToStorage(STORAGE_KEYS.EVENEMENTS, []);
 
-  console.log('Données par défaut créées avec planification automatique');
-};
-
-// Mise à jour de la planification des saisons
-const updateSeasonPlanning = async (): Promise<void> => {
-  try {
-    const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
-      saisonActive: '', 
-      saisons: [],
-      planificationAutomatique: true,
-      nombreSaisonsPlanifiees: 5
-    });
-    
-    if (!settings.planificationAutomatique) {
-      return;
-    }
-    
-    const saisons = loadFromStorage<Saison[]>(STORAGE_KEYS.SAISONS, []);
-    const currentYear = new Date().getFullYear();
-    
-    // Vérifier s'il faut ajouter de nouvelles saisons
-    const maxYear = Math.max(...saisons.map(s => {
-      const year = parseInt(s.nom.split('-')[0]);
-      return isNaN(year) ? currentYear : year;
-    }));
-    
-    const yearsToAdd = (currentYear + settings.nombreSaisonsPlanifiees - 1) - maxYear;
-    
-    if (yearsToAdd > 0) {
-      const newSeasons = generateFutureSeasons(maxYear + 1, yearsToAdd);
-      const updatedSeasons = [...saisons, ...newSeasons];
-      
-      saveToStorage(STORAGE_KEYS.SAISONS, updatedSeasons);
-      console.log(`${yearsToAdd} nouvelles saisons planifiées ajoutées`);
-    }
-  } catch (error) {
-    console.error('Erreur lors de la mise à jour de la planification:', error);
-  }
+  console.log('Données par défaut créées');
 };
 
 // Fonctions pour les saisons
 export const getSaisons = (): Saison[] => {
-  const saisons = loadFromStorage<Saison[]>(STORAGE_KEYS.SAISONS, []);
-  // Trier par ordre chronologique
-  return saisons.sort((a, b) => {
-    if (a.ordre && b.ordre) {
-      return a.ordre - b.ordre;
-    }
-    // Fallback sur le nom de la saison
-    return a.nom.localeCompare(b.nom);
-  });
+  return loadFromStorage<Saison[]>(STORAGE_KEYS.SAISONS, []);
+};
+
+export const getSeasonOptions = (): string[] => {
+  return generateSeasonOptions();
 };
 
 export const getSaisonActive = (): string => {
-  const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
-    saisonActive: '', 
-    saisons: [],
-    planificationAutomatique: true,
-    nombreSaisonsPlanifiees: 5
-  });
+  const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '' });
   return settings.saisonActive;
 };
 
@@ -285,22 +251,6 @@ export const setSaisonActive = (saisonId: string): boolean => {
       return false;
     }
 
-    // Vérifier si on passe à une saison planifiée
-    if (saison.planifiee) {
-      // Trouver la saison précédente
-      const currentSaisons = saisons.filter(s => !s.planifiee);
-      const previousSeason = currentSaisons.find(s => s.active);
-      
-      if (previousSeason) {
-        // Copier les données de la saison précédente
-        copyAdherentsToNewSeason(previousSeason.nom, saison.nom);
-        copyActivitesToNewSeason(previousSeason.nom, saison.nom);
-        
-        // Marquer la saison comme non planifiée
-        saison.planifiee = false;
-      }
-    }
-
     // Mettre à jour les saisons (désactiver toutes, activer la sélectionnée)
     const updatedSaisons = saisons.map(s => ({
       ...s,
@@ -308,20 +258,17 @@ export const setSaisonActive = (saisonId: string): boolean => {
     }));
 
     // Mettre à jour les paramètres
-    const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
-      saisonActive: '', 
-      saisons: [],
-      planificationAutomatique: true,
-      nombreSaisonsPlanifiees: 5
-    });
+    const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '' });
     const updatedSettings = {
       ...settings,
-      saisonActive: saison.nom,
-      saisons: updatedSaisons
+      saisonActive: saison.nom
     };
 
     saveToStorage(STORAGE_KEYS.SAISONS, updatedSaisons);
     saveToStorage(STORAGE_KEYS.SETTINGS, updatedSettings);
+    
+    // Invalider le cache
+    invalidateCache();
     
     console.log('Saison active changée:', saison.nom);
     return true;
@@ -331,24 +278,39 @@ export const setSaisonActive = (saisonId: string): boolean => {
   }
 };
 
-export const addSaison = (saison: Saison): boolean => {
+export const addSaison = (seasonName: string, dateDebut: string, dateFin: string): boolean => {
   try {
     const saisons = getSaisons();
     
-    // Déterminer l'ordre automatiquement
-    const maxOrdre = Math.max(...saisons.map(s => s.ordre || 0), 0);
-    saison.ordre = maxOrdre + 1;
+    // Vérifier si la saison existe déjà
+    if (saisons.find(s => s.nom === seasonName)) {
+      console.error('Cette saison existe déjà');
+      return false;
+    }
+
+    const newSaison: Saison = {
+      id: `season_${Date.now()}`,
+      nom: seasonName,
+      dateDebut,
+      dateFin,
+      active: false,
+      terminee: false
+    };
     
-    const newSaisons = [...saisons, saison];
-    
+    const newSaisons = [...saisons, newSaison];
     saveToStorage(STORAGE_KEYS.SAISONS, newSaisons);
     
-    // Si c'est la première saison ou si elle est marquée comme active
-    if (saisons.length === 0 || saison.active) {
-      setSaisonActive(saison.id);
+    // Copier les données de la saison active si elle existe
+    const saisonActive = getSaisonActive();
+    if (saisonActive && saisonActive !== seasonName) {
+      copyAdherentsToNewSeason(saisonActive, seasonName);
+      copyActivitesToNewSeason(saisonActive, seasonName);
     }
     
-    console.log('Nouvelle saison ajoutée:', saison.nom);
+    // Invalider le cache
+    invalidateCache();
+    
+    console.log('Nouvelle saison ajoutée:', seasonName);
     return true;
   } catch (error) {
     console.error('Erreur lors de l\'ajout de saison:', error);
@@ -365,18 +327,16 @@ export const updateSaison = (saison: Saison): boolean => {
     
     // Si la saison est active, mettre à jour les paramètres
     if (saison.active) {
-      const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
-        saisonActive: '', 
-        saisons: [],
-        planificationAutomatique: true,
-        nombreSaisonsPlanifiees: 5
-      });
+      const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '' });
       const updatedSettings = {
         ...settings,
         saisonActive: saison.nom
       };
       saveToStorage(STORAGE_KEYS.SETTINGS, updatedSettings);
     }
+    
+    // Invalider le cache
+    invalidateCache();
     
     console.log('Saison mise à jour:', saison.nom);
     return true;
@@ -418,6 +378,9 @@ export const deleteSaison = (id: string): boolean => {
     const updatedSaisons = saisons.filter(s => s.id !== id);
     saveToStorage(STORAGE_KEYS.SAISONS, updatedSaisons);
     
+    // Invalider le cache
+    invalidateCache();
+    
     console.log('Saison et toutes ses données supprimées:', saisonToDelete.nom);
     return true;
   } catch (error) {
@@ -456,59 +419,13 @@ export const deleteAllSeasonsExceptActive = (): boolean => {
     const updatedSaisons = [activeSeason];
     saveToStorage(STORAGE_KEYS.SAISONS, updatedSaisons);
     
+    // Invalider le cache
+    invalidateCache();
+    
     console.log('Toutes les saisons supprimées sauf la saison active');
     return true;
   } catch (error) {
     console.error('Erreur lors de la suppression de toutes les saisons:', error);
-    return false;
-  }
-};
-
-// Fonction pour régénérer la planification automatique
-export const regenerateSeasonPlanning = (nombreSaisons: number): boolean => {
-  try {
-    const saisons = getSaisons();
-    const saisonActive = getSaisonActive();
-    
-    // Garder seulement la saison active
-    const activeSeason = saisons.find(s => s.nom === saisonActive);
-    if (!activeSeason) {
-      console.error('Saison active non trouvée');
-      return false;
-    }
-    
-    // Extraire l'année de la saison active
-    const activeYear = parseInt(activeSeason.nom.split('-')[0]);
-    
-    // Générer les nouvelles saisons à partir de l'année suivante
-    const newSeasons = generateFutureSeasons(activeYear + 1, nombreSaisons - 1);
-    
-    // Combiner la saison active avec les nouvelles saisons
-    const allSeasons = [
-      { ...activeSeason, ordre: 1, planifiee: false },
-      ...newSeasons.map((s, index) => ({ ...s, ordre: index + 2 }))
-    ];
-    
-    saveToStorage(STORAGE_KEYS.SAISONS, allSeasons);
-    
-    // Mettre à jour les paramètres
-    const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
-      saisonActive: '', 
-      saisons: [],
-      planificationAutomatique: true,
-      nombreSaisonsPlanifiees: 5
-    });
-    const updatedSettings = {
-      ...settings,
-      nombreSaisonsPlanifiees: nombreSaisons,
-      saisons: allSeasons
-    };
-    saveToStorage(STORAGE_KEYS.SETTINGS, updatedSettings);
-    
-    console.log(`Planification régénérée avec ${nombreSaisons} saisons`);
-    return true;
-  } catch (error) {
-    console.error('Erreur lors de la régénération de la planification:', error);
     return false;
   }
 };
@@ -533,14 +450,16 @@ export const saveAdherent = (adherent: Adherent): boolean => {
     if (existingIndex >= 0) {
       // Mise à jour
       allAdherents[existingIndex] = adherent;
-      console.log('Adhérent mis à jour:', adherent.prenom, adherent.nom);
     } else {
       // Ajout
       allAdherents.push(adherent);
-      console.log('Nouvel adhérent ajouté:', adherent.prenom, adherent.nom);
     }
     
-    return saveToStorage(STORAGE_KEYS.ADHERENTS, allAdherents);
+    const success = saveToStorage(STORAGE_KEYS.ADHERENTS, allAdherents);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.ADHERENTS);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la sauvegarde de l\'adhérent:', error);
     return false;
@@ -557,8 +476,11 @@ export const deleteAdherent = (id: string): boolean => {
     const allAdherents = loadFromStorage<Adherent[]>(STORAGE_KEYS.ADHERENTS, []);
     const updatedAdherents = allAdherents.filter(a => a.id !== id);
     
-    console.log('Adhérent supprimé:', id);
-    return saveToStorage(STORAGE_KEYS.ADHERENTS, updatedAdherents);
+    const success = saveToStorage(STORAGE_KEYS.ADHERENTS, updatedAdherents);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.ADHERENTS);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la suppression de l\'adhérent:', error);
     return false;
@@ -585,14 +507,16 @@ export const saveActivite = (activite: Activite): boolean => {
     if (existingIndex >= 0) {
       // Mise à jour
       allActivites[existingIndex] = activite;
-      console.log('Activité mise à jour:', activite.nom);
     } else {
       // Ajout
       allActivites.push(activite);
-      console.log('Nouvelle activité ajoutée:', activite.nom);
     }
     
-    return saveToStorage(STORAGE_KEYS.ACTIVITES, allActivites);
+    const success = saveToStorage(STORAGE_KEYS.ACTIVITES, allActivites);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.ACTIVITES);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la sauvegarde de l\'activité:', error);
     return false;
@@ -609,8 +533,11 @@ export const deleteActivite = (id: string): boolean => {
     const allActivites = loadFromStorage<Activite[]>(STORAGE_KEYS.ACTIVITES, []);
     const updatedActivites = allActivites.filter(a => a.id !== id);
     
-    console.log('Activité supprimée:', id);
-    return saveToStorage(STORAGE_KEYS.ACTIVITES, updatedActivites);
+    const success = saveToStorage(STORAGE_KEYS.ACTIVITES, updatedActivites);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.ACTIVITES);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la suppression de l\'activité:', error);
     return false;
@@ -637,14 +564,16 @@ export const savePaiement = (paiement: Paiement): boolean => {
     if (existingIndex >= 0) {
       // Mise à jour
       allPaiements[existingIndex] = paiement;
-      console.log('Paiement mis à jour:', paiement.id);
     } else {
       // Ajout
       allPaiements.push(paiement);
-      console.log('Nouveau paiement ajouté:', paiement.id);
     }
     
-    return saveToStorage(STORAGE_KEYS.PAIEMENTS, allPaiements);
+    const success = saveToStorage(STORAGE_KEYS.PAIEMENTS, allPaiements);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.PAIEMENTS);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la sauvegarde du paiement:', error);
     return false;
@@ -661,8 +590,11 @@ export const deletePaiement = (id: string): boolean => {
     const allPaiements = loadFromStorage<Paiement[]>(STORAGE_KEYS.PAIEMENTS, []);
     const updatedPaiements = allPaiements.filter(p => p.id !== id);
     
-    console.log('Paiement supprimé:', id);
-    return saveToStorage(STORAGE_KEYS.PAIEMENTS, updatedPaiements);
+    const success = saveToStorage(STORAGE_KEYS.PAIEMENTS, updatedPaiements);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.PAIEMENTS);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la suppression du paiement:', error);
     return false;
@@ -682,14 +614,16 @@ export const saveTache = (tache: Tache): boolean => {
     if (existingIndex >= 0) {
       // Mise à jour
       allTaches[existingIndex] = tache;
-      console.log('Tâche mise à jour:', tache.nom);
     } else {
       // Ajout
       allTaches.push(tache);
-      console.log('Nouvelle tâche ajoutée:', tache.nom);
     }
     
-    return saveToStorage(STORAGE_KEYS.TACHES, allTaches);
+    const success = saveToStorage(STORAGE_KEYS.TACHES, allTaches);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.TACHES);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la sauvegarde de la tâche:', error);
     return false;
@@ -701,8 +635,11 @@ export const deleteTache = (id: string): boolean => {
     const allTaches = loadFromStorage<Tache[]>(STORAGE_KEYS.TACHES, []);
     const updatedTaches = allTaches.filter(t => t.id !== id);
     
-    console.log('Tâche supprimée:', id);
-    return saveToStorage(STORAGE_KEYS.TACHES, updatedTaches);
+    const success = saveToStorage(STORAGE_KEYS.TACHES, updatedTaches);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.TACHES);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la suppression de la tâche:', error);
     return false;
@@ -722,14 +659,16 @@ export const saveEvenement = (evenement: EvenementAgenda): boolean => {
     if (existingIndex >= 0) {
       // Mise à jour
       allEvenements[existingIndex] = evenement;
-      console.log('Événement mis à jour:', evenement.titre);
     } else {
       // Ajout
       allEvenements.push(evenement);
-      console.log('Nouvel événement ajouté:', evenement.titre);
     }
     
-    return saveToStorage(STORAGE_KEYS.EVENEMENTS, allEvenements);
+    const success = saveToStorage(STORAGE_KEYS.EVENEMENTS, allEvenements);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.EVENEMENTS);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la sauvegarde de l\'événement:', error);
     return false;
@@ -741,8 +680,11 @@ export const deleteEvenement = (id: string): boolean => {
     const allEvenements = loadFromStorage<EvenementAgenda[]>(STORAGE_KEYS.EVENEMENTS, []);
     const updatedEvenements = allEvenements.filter(e => e.id !== id);
     
-    console.log('Événement supprimé:', id);
-    return saveToStorage(STORAGE_KEYS.EVENEMENTS, updatedEvenements);
+    const success = saveToStorage(STORAGE_KEYS.EVENEMENTS, updatedEvenements);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.EVENEMENTS);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la suppression de l\'événement:', error);
     return false;
@@ -762,14 +704,16 @@ export const saveTypeAdhesion = (type: TypeAdhesion): boolean => {
     if (existingIndex >= 0) {
       // Mise à jour
       allTypes[existingIndex] = type;
-      console.log('Type d\'adhésion mis à jour:', type.nom);
     } else {
       // Ajout
       allTypes.push(type);
-      console.log('Nouveau type d\'adhésion ajouté:', type.nom);
     }
     
-    return saveToStorage(STORAGE_KEYS.TYPES_ADHESION, allTypes);
+    const success = saveToStorage(STORAGE_KEYS.TYPES_ADHESION, allTypes);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.TYPES_ADHESION);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la sauvegarde du type d\'adhésion:', error);
     return false;
@@ -781,8 +725,11 @@ export const deleteTypeAdhesion = (id: string): boolean => {
     const allTypes = loadFromStorage<TypeAdhesion[]>(STORAGE_KEYS.TYPES_ADHESION, []);
     const updatedTypes = allTypes.filter(t => t.id !== id);
     
-    console.log('Type d\'adhésion supprimé:', id);
-    return saveToStorage(STORAGE_KEYS.TYPES_ADHESION, updatedTypes);
+    const success = saveToStorage(STORAGE_KEYS.TYPES_ADHESION, updatedTypes);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.TYPES_ADHESION);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la suppression du type d\'adhésion:', error);
     return false;
@@ -802,14 +749,16 @@ export const saveModePaiement = (mode: ModePaiement): boolean => {
     if (existingIndex >= 0) {
       // Mise à jour
       allModes[existingIndex] = mode;
-      console.log('Mode de paiement mis à jour:', mode.nom);
     } else {
       // Ajout
       allModes.push(mode);
-      console.log('Nouveau mode de paiement ajouté:', mode.nom);
     }
     
-    return saveToStorage(STORAGE_KEYS.MODES_PAIEMENT, allModes);
+    const success = saveToStorage(STORAGE_KEYS.MODES_PAIEMENT, allModes);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.MODES_PAIEMENT);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la sauvegarde du mode de paiement:', error);
     return false;
@@ -821,8 +770,11 @@ export const deleteModePaiement = (id: string): boolean => {
     const allModes = loadFromStorage<ModePaiement[]>(STORAGE_KEYS.MODES_PAIEMENT, []);
     const updatedModes = allModes.filter(m => m.id !== id);
     
-    console.log('Mode de paiement supprimé:', id);
-    return saveToStorage(STORAGE_KEYS.MODES_PAIEMENT, updatedModes);
+    const success = saveToStorage(STORAGE_KEYS.MODES_PAIEMENT, updatedModes);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.MODES_PAIEMENT);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la suppression du mode de paiement:', error);
     return false;
@@ -842,14 +794,16 @@ export const saveTypeEvenement = (type: TypeEvenement): boolean => {
     if (existingIndex >= 0) {
       // Mise à jour
       allTypes[existingIndex] = type;
-      console.log('Type d\'événement mis à jour:', type.nom);
     } else {
       // Ajout
       allTypes.push(type);
-      console.log('Nouveau type d\'événement ajouté:', type.nom);
     }
     
-    return saveToStorage(STORAGE_KEYS.TYPES_EVENEMENT, allTypes);
+    const success = saveToStorage(STORAGE_KEYS.TYPES_EVENEMENT, allTypes);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.TYPES_EVENEMENT);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la sauvegarde du type d\'événement:', error);
     return false;
@@ -861,8 +815,11 @@ export const deleteTypeEvenement = (id: string): boolean => {
     const allTypes = loadFromStorage<TypeEvenement[]>(STORAGE_KEYS.TYPES_EVENEMENT, []);
     const updatedTypes = allTypes.filter(t => t.id !== id);
     
-    console.log('Type d\'événement supprimé:', id);
-    return saveToStorage(STORAGE_KEYS.TYPES_EVENEMENT, updatedTypes);
+    const success = saveToStorage(STORAGE_KEYS.TYPES_EVENEMENT, updatedTypes);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.TYPES_EVENEMENT);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la suppression du type d\'événement:', error);
     return false;
@@ -871,18 +828,16 @@ export const deleteTypeEvenement = (id: string): boolean => {
 
 // Fonctions utilitaires
 export const getSettings = (): AppSettings => {
-  return loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
-    saisonActive: '', 
-    saisons: [],
-    planificationAutomatique: true,
-    nombreSaisonsPlanifiees: 5
-  });
+  return loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '' });
 };
 
 export const updateSettings = (settings: AppSettings): boolean => {
   try {
-    console.log('Mise à jour des paramètres:', settings);
-    return saveToStorage(STORAGE_KEYS.SETTINGS, settings);
+    const success = saveToStorage(STORAGE_KEYS.SETTINGS, settings);
+    if (success) {
+      invalidateCache(STORAGE_KEYS.SETTINGS);
+    }
+    return success;
   } catch (error) {
     console.error('Erreur lors de la mise à jour des paramètres:', error);
     return false;
@@ -900,13 +855,14 @@ export const getDatabaseInfo = () => {
     const evenements = getEvenements();
     
     return {
-      version: 'localStorage',
+      version: 'localStorage optimisé',
       saisonActive,
       totalAdherents: adherents.length,
       totalActivites: activites.length,
       totalPaiements: paiements.length,
       totalTaches: taches.length,
       totalEvenements: evenements.length,
+      cacheSize: Object.keys(cache).length,
       storageUsed: Object.keys(STORAGE_KEYS).map(key => ({
         key,
         size: localStorage.getItem(STORAGE_KEYS[key as keyof typeof STORAGE_KEYS])?.length || 0
@@ -918,12 +874,13 @@ export const getDatabaseInfo = () => {
   }
 };
 
-// Fonction pour vider complètement la base de données (utile pour les tests)
+// Fonction pour vider complètement la base de données
 export const clearDatabase = (): boolean => {
   try {
     Object.values(STORAGE_KEYS).forEach(key => {
       localStorage.removeItem(key);
     });
+    invalidateCache();
     console.log('Base de données vidée');
     return true;
   } catch (error) {
@@ -976,6 +933,9 @@ export const importDatabase = (jsonData: string): boolean => {
     if (data.typesEvenement) saveToStorage(STORAGE_KEYS.TYPES_EVENEMENT, data.typesEvenement);
     if (data.saisons) saveToStorage(STORAGE_KEYS.SAISONS, data.saisons);
     if (data.settings) saveToStorage(STORAGE_KEYS.SETTINGS, data.settings);
+    
+    // Invalider le cache après l'import
+    invalidateCache();
     
     console.log('Données importées avec succès');
     return true;

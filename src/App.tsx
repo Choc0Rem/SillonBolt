@@ -13,10 +13,10 @@ import {
   getAdherents, getActivites, getPaiements, getTaches, getEvenements,
   getTypesAdhesion, getModesPaiement, getSaisons, getSettings,
   saveAdherent, saveActivite, savePaiement, saveTache, saveEvenement,
-  saveTypeAdhesion, saveModePaiement, setSaisonActive, addSaison, updateSaison, deleteSaison, updateSettings,
+  saveTypeAdhesion, saveModePaiement, setSaisonActive, addSaison, updateSaison, deleteSaison,
   deleteAdherent, deleteActivite, deletePaiement, deleteTache, deleteEvenement,
   deleteTypeAdhesion, deleteModePaiement, isSaisonTerminee, getSaisonActive,
-  deleteAllSeasonsExceptActive, regenerateSeasonPlanning
+  deleteAllSeasonsExceptActive, updateSettings, getSeasonOptions
 } from './utils/database';
 import { Adherent, Activite, Paiement, Tache, EvenementAgenda, TypeAdhesion, ModePaiement, Saison, AppSettings } from './types';
 
@@ -307,10 +307,11 @@ function App() {
     }
   };
 
-  const handleAddSaison = (saison: Saison) => {
-    const success = addSaison(saison);
+  const handleAddSaison = (seasonName: string, dateDebut: string, dateFin: string) => {
+    const success = addSaison(seasonName, dateDebut, dateFin);
     if (success) {
       loadAllData(); // Recharger pour voir les nouvelles données copiées
+      alert(`Saison ${seasonName} créée avec succès ! Les adhérents et activités de la saison précédente ont été copiés.`);
     } else {
       alert('Erreur lors de l\'ajout de la saison');
     }
@@ -343,16 +344,6 @@ function App() {
       } else {
         alert('Erreur lors de la suppression des saisons');
       }
-    }
-  };
-
-  const handleRegenerateSeasonPlanning = (nombreSaisons: number) => {
-    const success = regenerateSeasonPlanning(nombreSaisons);
-    if (success) {
-      loadAllData();
-      alert(`Planification régénérée avec ${nombreSaisons} saisons`);
-    } else {
-      alert('Erreur lors de la régénération de la planification');
     }
   };
 
@@ -434,6 +425,7 @@ function App() {
             modesPaiement={modesPaiement}
             saisons={saisons}
             settings={settings}
+            seasonOptions={getSeasonOptions()}
             onUpdateTypesAdhesion={handleUpdateTypesAdhesion}
             onUpdateModesPaiement={handleUpdateModesPaiement}
             onChangeSaison={handleChangeSaison}
@@ -441,7 +433,6 @@ function App() {
             onUpdateSaison={handleUpdateSaison}
             onDeleteSaison={handleDeleteSaison}
             onDeleteAllSeasons={handleDeleteAllSeasons}
-            onRegenerateSeasonPlanning={handleRegenerateSeasonPlanning}
             onUpdateSettings={handleUpdateSettings}
           />
         );
