@@ -196,7 +196,7 @@ export default function Activities({ activites, adherents, onUpdateActivites }: 
                   value={formData.nom}
                   onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Ex: Yoga, Tennis..."
+                  placeholder="Nom de l'activité..."
                 />
               </div>
 
