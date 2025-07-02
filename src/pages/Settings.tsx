@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import Card from '../components/Card';
 import Button from '../components/Button';
-import { Plus, Edit, Trash2, Settings as SettingsIcon, CreditCard, Users, Calendar, CheckCircle, XCircle, Trash } from 'lucide-react';
+import { Plus, Edit, Trash2, Settings as SettingsIcon, CreditCard, Users, Calendar, CheckCircle, XCircle } from 'lucide-react';
 import { TypeAdhesion, ModePaiement, Saison, AppSettings } from '../types';
-import { getSaisonActive, isSaisonTerminee } from '../utils/database';
+import { getSaisonActive } from '../utils/database';
 
 interface SettingsProps {
   typesAdhesion: TypeAdhesion[];
@@ -17,7 +17,6 @@ interface SettingsProps {
   onAddSaison: (seasonName: string, dateDebut: string, dateFin: string) => void;
   onUpdateSaison: (saison: Saison) => void;
   onDeleteSaison: (id: string) => void;
-  onDeleteAllSeasons: () => void;
   onUpdateSettings: (settings: AppSettings) => void;
 }
 
@@ -33,7 +32,6 @@ export default function Settings({
   onAddSaison,
   onUpdateSaison,
   onDeleteSaison,
-  onDeleteAllSeasons,
   onUpdateSettings
 }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<'seasons' | 'membership' | 'payment'>('seasons');
@@ -59,8 +57,6 @@ export default function Settings({
     dateFin: '',
     terminee: false
   });
-
-  const saisonTerminee = isSaisonTerminee();
 
   // Gestion des types d'adhésion
   const handleMembershipSubmit = (e: React.FormEvent) => {
@@ -230,30 +226,10 @@ export default function Settings({
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold text-gray-800">Gestion des Saisons</h3>
-        <div className="flex gap-3">
-          <Button 
-            onClick={onDeleteAllSeasons} 
-            icon={Trash}
-            variant="danger"
-          >
-            Supprimer Toutes
-          </Button>
-          <Button onClick={() => setShowSeasonModal(true)} icon={Plus}>
-            Nouvelle Saison
-          </Button>
-        </div>
+        <Button onClick={() => setShowSeasonModal(true)} icon={Plus}>
+          Nouvelle Saison
+        </Button>
       </div>
-
-      {saisonTerminee && (
-        <Card className="border-orange-200 bg-orange-50">
-          <div className="flex items-center gap-3 text-orange-800">
-            <Calendar className="w-5 h-5" />
-            <p className="font-medium">
-              Saison terminée - Les modifications des données sont désactivées
-            </p>
-          </div>
-        </Card>
-      )}
 
       <Card title="Saison Active">
         <div className="space-y-4">
@@ -610,18 +586,7 @@ export default function Settings({
                   />
                   <span className="text-sm text-gray-700">Saison terminée</span>
                 </label>
-                <p className="text-xs text-gray-500 mt-1">
-                  Une saison terminée ne permet plus de modifications des données
-                </p>
               </div>
-
-              {!editingSaison && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-sm text-blue-800">
-                    <strong>Note :</strong> Les adhérents et activités de la saison active seront automatiquement copiés vers cette nouvelle saison.
-                  </p>
-                </div>
-              )}
 
               <div className="flex gap-3 pt-4">
                 <Button type="submit" className="flex-1">

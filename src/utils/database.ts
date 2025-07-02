@@ -68,14 +68,16 @@ const invalidateCache = (key?: string) => {
   }
 };
 
-// Générer les options de saisons (années scolaires)
+// Générer les options de saisons (années scolaires) à partir de 2025-2026
 const generateSeasonOptions = (): string[] => {
+  const startYear = 2025;
   const currentYear = new Date().getFullYear();
   const seasons = [];
   
-  // Générer 10 années scolaires (5 passées, actuelle, 4 futures)
-  for (let i = -5; i <= 4; i++) {
-    const year = currentYear + i;
+  // Commencer à partir de 2025-2026 et aller jusqu'à 20 ans dans le futur
+  const endYear = Math.max(currentYear + 20, startYear + 20);
+  
+  for (let year = startYear; year <= endYear; year++) {
     seasons.push(`${year}-${year + 1}`);
   }
   
@@ -167,15 +169,14 @@ export const initDatabase = async (): Promise<boolean> => {
 
 // Création des données par défaut
 const createDefaultData = async (): Promise<void> => {
-  const currentYear = new Date().getFullYear();
-  const currentSeason = `${currentYear}-${currentYear + 1}`;
+  const currentSeason = '2025-2026';
 
   // Saison par défaut
   const defaultSaison: Saison = {
-    id: `season_${currentYear}`,
+    id: `season_2025`,
     nom: currentSeason,
-    dateDebut: `${currentYear}-09-01`,
-    dateFin: `${currentYear + 1}-08-31`,
+    dateDebut: '2025-09-01',
+    dateFin: '2026-08-31',
     active: true,
     terminee: false
   };
@@ -361,6 +362,12 @@ export const deleteSaison = (id: string): boolean => {
       return false;
     }
     
+    // Vérifier qu'il reste au moins une saison
+    if (saisons.length <= 1) {
+      console.error('Impossible de supprimer la dernière saison');
+      return false;
+    }
+    
     // Supprimer toutes les données liées à cette saison
     const allAdherents = loadFromStorage<Adherent[]>(STORAGE_KEYS.ADHERENTS, []);
     const allActivites = loadFromStorage<Activite[]>(STORAGE_KEYS.ACTIVITES, []);
@@ -389,47 +396,6 @@ export const deleteSaison = (id: string): boolean => {
   }
 };
 
-// Fonction pour supprimer toutes les saisons (sauf l'active)
-export const deleteAllSeasonsExceptActive = (): boolean => {
-  try {
-    const saisons = getSaisons();
-    const saisonActive = getSaisonActive();
-    
-    // Garder seulement la saison active
-    const activeSeason = saisons.find(s => s.nom === saisonActive);
-    if (!activeSeason) {
-      console.error('Saison active non trouvée');
-      return false;
-    }
-    
-    // Supprimer toutes les données des autres saisons
-    const allAdherents = loadFromStorage<Adherent[]>(STORAGE_KEYS.ADHERENTS, []);
-    const allActivites = loadFromStorage<Activite[]>(STORAGE_KEYS.ACTIVITES, []);
-    const allPaiements = loadFromStorage<Paiement[]>(STORAGE_KEYS.PAIEMENTS, []);
-    
-    const updatedAdherents = allAdherents.filter(a => a.saison === saisonActive);
-    const updatedActivites = allActivites.filter(a => a.saison === saisonActive);
-    const updatedPaiements = allPaiements.filter(p => p.saison === saisonActive);
-    
-    saveToStorage(STORAGE_KEYS.ADHERENTS, updatedAdherents);
-    saveToStorage(STORAGE_KEYS.ACTIVITES, updatedActivites);
-    saveToStorage(STORAGE_KEYS.PAIEMENTS, updatedPaiements);
-    
-    // Garder seulement la saison active
-    const updatedSaisons = [activeSeason];
-    saveToStorage(STORAGE_KEYS.SAISONS, updatedSaisons);
-    
-    // Invalider le cache
-    invalidateCache();
-    
-    console.log('Toutes les saisons supprimées sauf la saison active');
-    return true;
-  } catch (error) {
-    console.error('Erreur lors de la suppression de toutes les saisons:', error);
-    return false;
-  }
-};
-
 // Fonctions pour les adhérents
 export const getAdherents = (): Adherent[] => {
   const saisonActive = getSaisonActive();
@@ -438,11 +404,6 @@ export const getAdherents = (): Adherent[] => {
 };
 
 export const saveAdherent = (adherent: Adherent): boolean => {
-  if (isSaisonTerminee()) {
-    console.error('Impossible de sauvegarder : saison terminée');
-    return false;
-  }
-  
   try {
     const allAdherents = loadFromStorage<Adherent[]>(STORAGE_KEYS.ADHERENTS, []);
     const existingIndex = allAdherents.findIndex(a => a.id === adherent.id);
@@ -467,11 +428,6 @@ export const saveAdherent = (adherent: Adherent): boolean => {
 };
 
 export const deleteAdherent = (id: string): boolean => {
-  if (isSaisonTerminee()) {
-    console.error('Impossible de supprimer : saison terminée');
-    return false;
-  }
-  
   try {
     const allAdherents = loadFromStorage<Adherent[]>(STORAGE_KEYS.ADHERENTS, []);
     const updatedAdherents = allAdherents.filter(a => a.id !== id);
@@ -495,11 +451,6 @@ export const getActivites = (): Activite[] => {
 };
 
 export const saveActivite = (activite: Activite): boolean => {
-  if (isSaisonTerminee()) {
-    console.error('Impossible de sauvegarder : saison terminée');
-    return false;
-  }
-  
   try {
     const allActivites = loadFromStorage<Activite[]>(STORAGE_KEYS.ACTIVITES, []);
     const existingIndex = allActivites.findIndex(a => a.id === activite.id);
@@ -524,11 +475,6 @@ export const saveActivite = (activite: Activite): boolean => {
 };
 
 export const deleteActivite = (id: string): boolean => {
-  if (isSaisonTerminee()) {
-    console.error('Impossible de supprimer : saison terminée');
-    return false;
-  }
-  
   try {
     const allActivites = loadFromStorage<Activite[]>(STORAGE_KEYS.ACTIVITES, []);
     const updatedActivites = allActivites.filter(a => a.id !== id);
@@ -552,11 +498,6 @@ export const getPaiements = (): Paiement[] => {
 };
 
 export const savePaiement = (paiement: Paiement): boolean => {
-  if (isSaisonTerminee()) {
-    console.error('Impossible de sauvegarder : saison terminée');
-    return false;
-  }
-  
   try {
     const allPaiements = loadFromStorage<Paiement[]>(STORAGE_KEYS.PAIEMENTS, []);
     const existingIndex = allPaiements.findIndex(p => p.id === paiement.id);
@@ -581,11 +522,6 @@ export const savePaiement = (paiement: Paiement): boolean => {
 };
 
 export const deletePaiement = (id: string): boolean => {
-  if (isSaisonTerminee()) {
-    console.error('Impossible de supprimer : saison terminée');
-    return false;
-  }
-  
   try {
     const allPaiements = loadFromStorage<Paiement[]>(STORAGE_KEYS.PAIEMENTS, []);
     const updatedPaiements = allPaiements.filter(p => p.id !== id);

@@ -15,8 +15,8 @@ import {
   saveAdherent, saveActivite, savePaiement, saveTache, saveEvenement,
   saveTypeAdhesion, saveModePaiement, setSaisonActive, addSaison, updateSaison, deleteSaison,
   deleteAdherent, deleteActivite, deletePaiement, deleteTache, deleteEvenement,
-  deleteTypeAdhesion, deleteModePaiement, isSaisonTerminee, getSaisonActive,
-  deleteAllSeasonsExceptActive, updateSettings, getSeasonOptions
+  deleteTypeAdhesion, deleteModePaiement, getSaisonActive,
+  updateSettings, getSeasonOptions
 } from './utils/database';
 import { Adherent, Activite, Paiement, Tache, EvenementAgenda, TypeAdhesion, ModePaiement, Saison, AppSettings } from './types';
 
@@ -72,11 +72,6 @@ function App() {
 
   // Gestionnaires pour les adhérents
   const handleUpdateAdherents = (newAdherents: Adherent[]) => {
-    if (isSaisonTerminee()) {
-      alert('Impossible de modifier les adhérents : la saison est terminée');
-      return;
-    }
-    
     console.log('Mise à jour des adhérents:', newAdherents);
     
     // Traiter chaque adhérent
@@ -100,11 +95,6 @@ function App() {
   };
 
   const handleDeleteAdherent = (id: string) => {
-    if (isSaisonTerminee()) {
-      alert('Impossible de supprimer les adhérents : la saison est terminée');
-      return;
-    }
-    
     const success = deleteAdherent(id);
     if (success) {
       loadAllData();
@@ -115,11 +105,6 @@ function App() {
 
   // Gestionnaires pour les activités
   const handleUpdateActivites = (newActivites: Activite[]) => {
-    if (isSaisonTerminee()) {
-      alert('Impossible de modifier les activités : la saison est terminée');
-      return;
-    }
-    
     console.log('Mise à jour des activités:', newActivites);
     
     // Traiter chaque activité
@@ -143,11 +128,6 @@ function App() {
   };
 
   const handleDeleteActivite = (id: string) => {
-    if (isSaisonTerminee()) {
-      alert('Impossible de supprimer les activités : la saison est terminée');
-      return;
-    }
-    
     const success = deleteActivite(id);
     if (success) {
       loadAllData();
@@ -158,11 +138,6 @@ function App() {
 
   // Gestionnaires pour les paiements
   const handleUpdatePaiements = (newPaiements: Paiement[]) => {
-    if (isSaisonTerminee()) {
-      alert('Impossible de modifier les paiements : la saison est terminée');
-      return;
-    }
-    
     console.log('Mise à jour des paiements:', newPaiements);
     
     // Traiter chaque paiement
@@ -186,11 +161,6 @@ function App() {
   };
 
   const handleDeletePaiement = (id: string) => {
-    if (isSaisonTerminee()) {
-      alert('Impossible de supprimer les paiements : la saison est terminée');
-      return;
-    }
-    
     const success = deletePaiement(id);
     if (success) {
       loadAllData();
@@ -335,18 +305,6 @@ function App() {
     }
   };
 
-  const handleDeleteAllSeasons = () => {
-    if (confirm('Êtes-vous sûr de vouloir supprimer toutes les saisons sauf la saison active ? Cette action est irréversible.')) {
-      const success = deleteAllSeasonsExceptActive();
-      if (success) {
-        loadAllData();
-        alert('Toutes les saisons ont été supprimées sauf la saison active');
-      } else {
-        alert('Erreur lors de la suppression des saisons');
-      }
-    }
-  };
-
   const handleUpdateSettings = (newSettings: AppSettings) => {
     const success = updateSettings(newSettings);
     if (success) {
@@ -432,7 +390,6 @@ function App() {
             onAddSaison={handleAddSaison}
             onUpdateSaison={handleUpdateSaison}
             onDeleteSaison={handleDeleteSaison}
-            onDeleteAllSeasons={handleDeleteAllSeasons}
             onUpdateSettings={handleUpdateSettings}
           />
         );

@@ -3,7 +3,7 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import { Plus, Search, Edit, Trash2, Filter, CreditCard, User, Calendar, Euro, ChevronDown, ChevronRight } from 'lucide-react';
 import { Paiement, Adherent, Activite } from '../types';
-import { getSaisonActive, isSaisonTerminee } from '../utils/database';
+import { getSaisonActive } from '../utils/database';
 
 interface PaymentsProps {
   paiements: Paiement[];
@@ -34,8 +34,6 @@ export default function Payments({
     modePaiement: 'Espèces' as 'Espèces' | 'Chèque' | 'Virement',
     statut: 'En attente' as 'Payé' | 'En attente'
   });
-
-  const saisonTerminee = isSaisonTerminee();
 
   const filteredPaiements = paiements.filter(paiement => {
     const adherent = adherents.find(a => a.id === paiement.adherentId);
@@ -69,11 +67,6 @@ export default function Payments({
     e.preventDefault();
     
     console.log('Soumission formulaire paiement:', formData);
-    
-    if (saisonTerminee) {
-      alert('Impossible de modifier les paiements : la saison est terminée');
-      return;
-    }
     
     if (editingPayment) {
       console.log('Modification paiement existant:', editingPayment.id);
@@ -118,11 +111,6 @@ export default function Payments({
   };
 
   const handleEdit = (paiement: Paiement) => {
-    if (saisonTerminee) {
-      alert('Impossible de modifier les paiements : la saison est terminée');
-      return;
-    }
-    
     setEditingPayment(paiement);
     setFormData({
       adherentId: paiement.adherentId,
@@ -136,11 +124,6 @@ export default function Payments({
   };
 
   const handleDelete = (id: string) => {
-    if (saisonTerminee) {
-      alert('Impossible de supprimer les paiements : la saison est terminée');
-      return;
-    }
-    
     if (confirm('Êtes-vous sûr de vouloir supprimer ce paiement ?')) {
       const updatedPaiements = paiements.filter(p => p.id !== id);
       onUpdatePaiements(updatedPaiements);
@@ -172,18 +155,6 @@ export default function Payments({
 
   return (
     <div className="space-y-6">
-      {/* Alerte saison terminée */}
-      {saisonTerminee && (
-        <Card className="border-orange-200 bg-orange-50">
-          <div className="flex items-center gap-3 text-orange-800">
-            <Calendar className="w-5 h-5" />
-            <p className="font-medium">
-              Saison terminée - Les modifications sont désactivées
-            </p>
-          </div>
-        </Card>
-      )}
-
       {/* Statistiques rapides */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
@@ -264,7 +235,6 @@ export default function Payments({
         <Button 
           onClick={() => setShowModal(true)} 
           icon={Plus}
-          disabled={saisonTerminee}
         >
           Nouveau Paiement
         </Button>
@@ -370,7 +340,6 @@ export default function Payments({
                                     variant="ghost" 
                                     size="sm" 
                                     onClick={() => handleEdit(paiement)}
-                                    disabled={saisonTerminee}
                                   >
                                     <Edit className="w-4 h-4" />
                                   </Button>
@@ -378,7 +347,6 @@ export default function Payments({
                                     variant="ghost" 
                                     size="sm" 
                                     onClick={() => handleDelete(paiement.id)}
-                                    disabled={saisonTerminee}
                                   >
                                     <Trash2 className="w-4 h-4 text-red-600" />
                                   </Button>
