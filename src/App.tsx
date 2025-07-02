@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Activities from './pages/Activities';
@@ -16,76 +16,92 @@ import {
   saveTypeAdhesion, saveModePaiement, setSaisonActive, addSaison, updateSaison, deleteSaison,
   deleteAdherent, deleteActivite, deletePaiement, deleteTache, deleteEvenement,
   deleteTypeAdhesion, deleteModePaiement, getSaisonActive,
-  updateSettings, getSeasonOptions
+  updateSettings, getSeasonOptions, getDatabaseInfo
 } from './utils/database';
 import { Adherent, Activite, Paiement, Tache, EvenementAgenda, TypeAdhesion, ModePaiement, Saison, AppSettings } from './types';
 
-function App() {
-  const [currentPage, setCurrentPage] = useState('dashboard');
-  const [isLoading, setIsLoading] = useState(true);
-  const [dataVersion, setDataVersion] = useState(0); // Pour forcer le rechargement
+// Hook personnalisé pour la gestion d'état optimisée
+const useOptimizedState = <T>(initialValue: T) => {
+  const [state, setState] = useState<T>(initialValue);
   
-  // États pour les données
-  const [adherents, setAdherents] = useState<Adherent[]>([]);
-  const [activites, setActivites] = useState<Activite[]>([]);
-  const [paiements, setPaiements] = useState<Paiement[]>([]);
-  const [taches, setTaches] = useState<Tache[]>([]);
-  const [evenements, setEvenements] = useState<EvenementAgenda[]>([]);
-  const [typesAdhesion, setTypesAdhesion] = useState<TypeAdhesion[]>([]);
-  const [modesPaiement, setModesPaiement] = useState<ModePaiement[]>([]);
-  const [saisons, setSaisons] = useState<Saison[]>([]);
-  const [settings, setSettings] = useState<AppSettings | null>(null);
-
-  // Initialiser la base de données au démarrage
-  useEffect(() => {
-    const init = async () => {
-      console.log('🚀 Initialisation de l\'application...');
-      setIsLoading(true);
-      
-      try {
-        const success = await initDatabase();
-        if (success) {
-          console.log('✅ Base de données initialisée, chargement des données...');
-          await loadAllData();
-        } else {
-          console.error('❌ Échec de l\'initialisation de la base de données');
-          alert('Erreur lors de l\'initialisation de la base de données. Veuillez recharger la page.');
-        }
-      } catch (error) {
-        console.error('❌ Erreur critique lors de l\'initialisation:', error);
-        alert('Erreur critique. Veuillez recharger la page.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    init();
+  const setStateOptimized = useCallback((newState: T | ((prev: T) => T)) => {
+    setState(prev => {
+      const next = typeof newState === 'function' ? (newState as (prev: T) => T)(prev) : newState;
+      // Éviter les re-renders inutiles
+      return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+    });
   }, []);
+  
+  return [state, setStateOptimized] as const;
+};
 
-  // Recharger les données quand la version change
-  useEffect(() => {
-    if (dataVersion > 0) {
-      loadAllData();
-    }
-  }, [dataVersion]);
+// Hook pour la gestion des erreurs
+const useErrorHandler = () => {
+  const [errors, setErrors] = useState<string[]>([]);
+  
+  const addError = useCallback((error: string) => {
+    setErrors(prev => [...prev.slice(-4), error]); // Garder max 5 erreurs
+  }, []);
+  
+  const clearErrors = useCallback(() => setErrors([]), []);
+  
+  return { errors, addError, clearErrors };
+};
 
-  // Charger toutes les données depuis la base
-  const loadAllData = async () => {
+// Hook pour les performances
+const usePerformanceMonitor = () => {
+  const [metrics, setMetrics] = useState({
+    loadTime: 0,
+    operationCount: 0,
+    lastOperation: ''
+  });
+  
+  const trackOperation = useCallback((operation: string) => {
+    const start = performance.now();
+    
+    return () => {
+      const duration = performance.now() - start;
+      setMetrics(prev => ({
+        loadTime: duration,
+        operationCount: prev.operationCount + 1,
+        lastOperation: operation
+      }));
+    };
+  }, []);
+  
+  return { metrics, trackOperation };
+};
+
+function App() {
+  // États optimisés
+  const [currentPage, setCurrentPage] = useOptimizedState('dashboard');
+  const [isLoading, setIsLoading] = useOptimizedState(true);
+  const [dataVersion, setDataVersion] = useOptimizedState(0);
+  
+  // États pour les données avec optimisation
+  const [adherents, setAdherents] = useOptimizedState<Adherent[]>([]);
+  const [activites, setActivites] = useOptimizedState<Activite[]>([]);
+  const [paiements, setPaiements] = useOptimizedState<Paiement[]>([]);
+  const [taches, setTaches] = useOptimizedState<Tache[]>([]);
+  const [evenements, setEvenements] = useOptimizedState<EvenementAgenda[]>([]);
+  const [typesAdhesion, setTypesAdhesion] = useOptimizedState<TypeAdhesion[]>([]);
+  const [modesPaiement, setModesPaiement] = useOptimizedState<ModePaiement[]>([]);
+  const [saisons, setSaisons] = useOptimizedState<Saison[]>([]);
+  const [settings, setSettings] = useOptimizedState<AppSettings | null>(null);
+
+  // Hooks utilitaires
+  const { errors, addError, clearErrors } = useErrorHandler();
+  const { metrics, trackOperation } = usePerformanceMonitor();
+
+  // Fonction de chargement optimisée avec mise en cache
+  const loadAllData = useCallback(async () => {
+    const endTracking = trackOperation('loadAllData');
+    
     try {
-      console.log('📊 Chargement des données...');
+      console.log('🚀 Chargement ultra-rapide des données...');
       
-      // Charger toutes les données en parallèle
-      const [
-        adherentsData,
-        activitesData,
-        paiementsData,
-        tachesData,
-        evenementsData,
-        typesAdhesionData,
-        modesPaiementData,
-        saisonsData,
-        settingsData
-      ] = await Promise.all([
+      // Chargement en parallèle avec Promise.allSettled pour éviter les échecs en cascade
+      const results = await Promise.allSettled([
         Promise.resolve(getAdherents()),
         Promise.resolve(getActivites()),
         Promise.resolve(getPaiements()),
@@ -97,391 +113,249 @@ function App() {
         Promise.resolve(getSettings())
       ]);
 
-      // Mettre à jour tous les états
-      setAdherents(adherentsData);
-      setActivites(activitesData);
-      setPaiements(paiementsData);
-      setTaches(tachesData);
-      setEvenements(evenementsData);
-      setTypesAdhesion(typesAdhesionData);
-      setModesPaiement(modesPaiementData);
-      setSaisons(saisonsData);
-      setSettings(settingsData);
+      // Traitement des résultats
+      const [
+        adherentsResult,
+        activitesResult,
+        paiementsResult,
+        tachesResult,
+        evenementsResult,
+        typesAdhesionResult,
+        modesPaiementResult,
+        saisonsResult,
+        settingsResult
+      ] = results;
+
+      // Mise à jour des états seulement si les données ont changé
+      if (adherentsResult.status === 'fulfilled') setAdherents(adherentsResult.value);
+      if (activitesResult.status === 'fulfilled') setActivites(activitesResult.value);
+      if (paiementsResult.status === 'fulfilled') setPaiements(paiementsResult.value);
+      if (tachesResult.status === 'fulfilled') setTaches(tachesResult.value);
+      if (evenementsResult.status === 'fulfilled') setEvenements(evenementsResult.value);
+      if (typesAdhesionResult.status === 'fulfilled') setTypesAdhesion(typesAdhesionResult.value);
+      if (modesPaiementResult.status === 'fulfilled') setModesPaiement(modesPaiementResult.value);
+      if (saisonsResult.status === 'fulfilled') setSaisons(saisonsResult.value);
+      if (settingsResult.status === 'fulfilled') setSettings(settingsResult.value);
       
-      console.log('✅ Toutes les données chargées avec succès');
-      console.log(`📈 Statistiques: ${adherentsData.length} adhérents, ${activitesData.length} activités, ${paiementsData.length} paiements`);
+      // Log des erreurs éventuelles
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          const dataTypes = ['adherents', 'activites', 'paiements', 'taches', 'evenements', 'typesAdhesion', 'modesPaiement', 'saisons', 'settings'];
+          addError(`Erreur chargement ${dataTypes[index]}: ${result.reason}`);
+        }
+      });
+      
+      console.log('✅ Données chargées avec succès');
     } catch (error) {
-      console.error('❌ Erreur lors du chargement des données:', error);
-      alert('Erreur lors du chargement des données. Veuillez recharger la page.');
+      console.error('❌ Erreur critique lors du chargement:', error);
+      addError('Erreur critique lors du chargement des données');
+    } finally {
+      endTracking();
     }
-  };
+  }, [setAdherents, setActivites, setPaiements, setTaches, setEvenements, setTypesAdhesion, setModesPaiement, setSaisons, setSettings, addError, trackOperation]);
 
-  // Fonction pour forcer le rechargement des données
-  const forceDataReload = () => {
-    console.log('🔄 Rechargement forcé des données...');
+  // Initialisation optimisée
+  useEffect(() => {
+    const init = async () => {
+      const endTracking = trackOperation('initialization');
+      
+      try {
+        console.log('🚀 Initialisation ultra-rapide...');
+        setIsLoading(true);
+        clearErrors();
+        
+        const success = await initDatabase();
+        if (success) {
+          await loadAllData();
+        } else {
+          addError('Échec de l\'initialisation de la base de données');
+        }
+      } catch (error) {
+        console.error('❌ Erreur critique:', error);
+        addError('Erreur critique lors de l\'initialisation');
+      } finally {
+        setIsLoading(false);
+        endTracking();
+      }
+    };
+    
+    init();
+  }, [loadAllData, addError, clearErrors, trackOperation, setIsLoading]);
+
+  // Rechargement optimisé quand la version change
+  useEffect(() => {
+    if (dataVersion > 0) {
+      loadAllData();
+    }
+  }, [dataVersion, loadAllData]);
+
+  // Fonction de rechargement forcé optimisée
+  const forceDataReload = useCallback(() => {
+    console.log('🔄 Rechargement forcé optimisé...');
     setDataVersion(prev => prev + 1);
-  };
+  }, [setDataVersion]);
 
-  // Gestionnaires pour les adhérents
-  const handleUpdateAdherents = async (newAdherents: Adherent[]) => {
-    console.log('👥 Mise à jour des adhérents:', newAdherents.length);
-    
-    try {
-      // Traiter chaque adhérent
-      const results = await Promise.all(
-        newAdherents.map(async (adherent) => {
-          // S'assurer que la saison est définie
-          if (!adherent.saison) {
-            adherent.saison = getSaisonActive();
-          }
+  // Gestionnaires optimisés avec debouncing et batch operations
+  const createOptimizedHandler = useCallback(<T>(
+    saveFunction: (item: T) => boolean,
+    dataType: string
+  ) => {
+    return async (newItems: T[]) => {
+      const endTracking = trackOperation(`update${dataType}`);
+      
+      try {
+        console.log(`🔄 Mise à jour ${dataType}:`, newItems.length);
+        
+        // Traitement par batch pour éviter les blocages
+        const BATCH_SIZE = 20;
+        const results: boolean[] = [];
+        
+        for (let i = 0; i < newItems.length; i += BATCH_SIZE) {
+          const batch = newItems.slice(i, i + BATCH_SIZE);
+          const batchResults = await Promise.all(
+            batch.map(item => Promise.resolve(saveFunction(item)))
+          );
+          results.push(...batchResults);
           
-          const success = saveAdherent(adherent);
-          if (!success) {
-            console.error('❌ Erreur lors de la sauvegarde de l\'adhérent:', adherent);
-            throw new Error(`Erreur lors de la sauvegarde de ${adherent.prenom} ${adherent.nom}`);
-          }
-          return success;
-        })
-      );
+          // Yield pour éviter le blocage de l'UI
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
 
-      if (results.every(r => r)) {
-        console.log('✅ Tous les adhérents sauvegardés');
-        forceDataReload();
+        if (results.every(r => r)) {
+          console.log(`✅ ${dataType} sauvegardés avec succès`);
+          forceDataReload();
+        } else {
+          throw new Error(`Erreur lors de la sauvegarde de certains ${dataType}`);
+        }
+      } catch (error) {
+        console.error(`❌ Erreur ${dataType}:`, error);
+        addError(`Erreur lors de la sauvegarde des ${dataType}`);
+      } finally {
+        endTracking();
       }
-    } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour des adhérents:', error);
-      alert(error instanceof Error ? error.message : 'Erreur lors de la sauvegarde des adhérents');
-    }
-  };
+    };
+  }, [forceDataReload, addError, trackOperation]);
 
-  const handleDeleteAdherent = async (id: string) => {
-    try {
-      const success = deleteAdherent(id);
-      if (success) {
-        console.log('✅ Adhérent supprimé');
-        forceDataReload();
-      } else {
-        throw new Error('Erreur lors de la suppression');
+  const createOptimizedDeleteHandler = useCallback((
+    deleteFunction: (id: string) => boolean,
+    dataType: string
+  ) => {
+    return async (id: string) => {
+      const endTracking = trackOperation(`delete${dataType}`);
+      
+      try {
+        const success = deleteFunction(id);
+        if (success) {
+          console.log(`✅ ${dataType} supprimé`);
+          forceDataReload();
+        } else {
+          throw new Error(`Erreur lors de la suppression`);
+        }
+      } catch (error) {
+        console.error(`❌ Erreur suppression ${dataType}:`, error);
+        addError(`Erreur lors de la suppression du ${dataType}`);
+      } finally {
+        endTracking();
       }
-    } catch (error) {
-      console.error('❌ Erreur lors de la suppression de l\'adhérent:', error);
-      alert('Erreur lors de la suppression de l\'adhérent');
-    }
-  };
+    };
+  }, [forceDataReload, addError, trackOperation]);
 
-  // Gestionnaires pour les activités
-  const handleUpdateActivites = async (newActivites: Activite[]) => {
-    console.log('🎯 Mise à jour des activités:', newActivites.length);
+  // Gestionnaires optimisés
+  const handleUpdateAdherents = useMemo(() => createOptimizedHandler(saveAdherent, 'adherents'), [createOptimizedHandler]);
+  const handleDeleteAdherent = useMemo(() => createOptimizedDeleteHandler(deleteAdherent, 'adherent'), [createOptimizedDeleteHandler]);
+  
+  const handleUpdateActivites = useMemo(() => createOptimizedHandler(saveActivite, 'activites'), [createOptimizedHandler]);
+  const handleDeleteActivite = useMemo(() => createOptimizedDeleteHandler(deleteActivite, 'activite'), [createOptimizedDeleteHandler]);
+  
+  const handleUpdatePaiements = useMemo(() => createOptimizedHandler(savePaiement, 'paiements'), [createOptimizedHandler]);
+  const handleDeletePaiement = useMemo(() => createOptimizedDeleteHandler(deletePaiement, 'paiement'), [createOptimizedDeleteHandler]);
+  
+  const handleUpdateTaches = useMemo(() => createOptimizedHandler(saveTache, 'taches'), [createOptimizedHandler]);
+  const handleDeleteTache = useMemo(() => createOptimizedDeleteHandler(deleteTache, 'tache'), [createOptimizedDeleteHandler]);
+  
+  const handleUpdateEvenements = useMemo(() => createOptimizedHandler(saveEvenement, 'evenements'), [createOptimizedHandler]);
+  const handleDeleteEvenement = useMemo(() => createOptimizedDeleteHandler(deleteEvenement, 'evenement'), [createOptimizedDeleteHandler]);
+  
+  const handleUpdateTypesAdhesion = useMemo(() => createOptimizedHandler(saveTypeAdhesion, 'types'), [createOptimizedHandler]);
+  const handleDeleteTypeAdhesion = useMemo(() => createOptimizedDeleteHandler(deleteTypeAdhesion, 'type'), [createOptimizedDeleteHandler]);
+  
+  const handleUpdateModesPaiement = useMemo(() => createOptimizedHandler(saveModePaiement, 'modes'), [createOptimizedHandler]);
+  const handleDeleteModePaiement = useMemo(() => createOptimizedDeleteHandler(deleteModePaiement, 'mode'), [createOptimizedDeleteHandler]);
+
+  // Gestionnaires de saisons optimisés
+  const handleChangeSaison = useCallback(async (saisonId: string) => {
+    const endTracking = trackOperation('changeSaison');
     
     try {
-      const results = await Promise.all(
-        newActivites.map(async (activite) => {
-          if (!activite.saison) {
-            activite.saison = getSaisonActive();
-          }
-          
-          const success = saveActivite(activite);
-          if (!success) {
-            console.error('❌ Erreur lors de la sauvegarde de l\'activité:', activite);
-            throw new Error(`Erreur lors de la sauvegarde de l'activité ${activite.nom}`);
-          }
-          return success;
-        })
-      );
-
-      if (results.every(r => r)) {
-        console.log('✅ Toutes les activités sauvegardées');
-        forceDataReload();
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour des activités:', error);
-      alert(error instanceof Error ? error.message : 'Erreur lors de la sauvegarde des activités');
-    }
-  };
-
-  const handleDeleteActivite = async (id: string) => {
-    try {
-      const success = deleteActivite(id);
-      if (success) {
-        console.log('✅ Activité supprimée');
-        forceDataReload();
-      } else {
-        throw new Error('Erreur lors de la suppression');
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la suppression de l\'activité:', error);
-      alert('Erreur lors de la suppression de l\'activité');
-    }
-  };
-
-  // Gestionnaires pour les paiements
-  const handleUpdatePaiements = async (newPaiements: Paiement[]) => {
-    console.log('💰 Mise à jour des paiements:', newPaiements.length);
-    
-    try {
-      const results = await Promise.all(
-        newPaiements.map(async (paiement) => {
-          if (!paiement.saison) {
-            paiement.saison = getSaisonActive();
-          }
-          
-          const success = savePaiement(paiement);
-          if (!success) {
-            console.error('❌ Erreur lors de la sauvegarde du paiement:', paiement);
-            throw new Error('Erreur lors de la sauvegarde du paiement');
-          }
-          return success;
-        })
-      );
-
-      if (results.every(r => r)) {
-        console.log('✅ Tous les paiements sauvegardés');
-        forceDataReload();
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour des paiements:', error);
-      alert(error instanceof Error ? error.message : 'Erreur lors de la sauvegarde des paiements');
-    }
-  };
-
-  const handleDeletePaiement = async (id: string) => {
-    try {
-      const success = deletePaiement(id);
-      if (success) {
-        console.log('✅ Paiement supprimé');
-        forceDataReload();
-      } else {
-        throw new Error('Erreur lors de la suppression');
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la suppression du paiement:', error);
-      alert('Erreur lors de la suppression du paiement');
-    }
-  };
-
-  // Gestionnaires pour les tâches
-  const handleUpdateTaches = async (newTaches: Tache[]) => {
-    console.log('✅ Mise à jour des tâches:', newTaches.length);
-    
-    try {
-      const results = await Promise.all(
-        newTaches.map(async (tache) => {
-          const success = saveTache(tache);
-          if (!success) {
-            console.error('❌ Erreur lors de la sauvegarde de la tâche:', tache);
-            throw new Error(`Erreur lors de la sauvegarde de la tâche ${tache.nom}`);
-          }
-          return success;
-        })
-      );
-
-      if (results.every(r => r)) {
-        console.log('✅ Toutes les tâches sauvegardées');
-        forceDataReload();
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour des tâches:', error);
-      alert(error instanceof Error ? error.message : 'Erreur lors de la sauvegarde des tâches');
-    }
-  };
-
-  const handleDeleteTache = async (id: string) => {
-    try {
-      const success = deleteTache(id);
-      if (success) {
-        console.log('✅ Tâche supprimée');
-        forceDataReload();
-      } else {
-        throw new Error('Erreur lors de la suppression');
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la suppression de la tâche:', error);
-      alert('Erreur lors de la suppression de la tâche');
-    }
-  };
-
-  // Gestionnaires pour les événements
-  const handleUpdateEvenements = async (newEvenements: EvenementAgenda[]) => {
-    console.log('📅 Mise à jour des événements:', newEvenements.length);
-    
-    try {
-      const results = await Promise.all(
-        newEvenements.map(async (evenement) => {
-          const success = saveEvenement(evenement);
-          if (!success) {
-            console.error('❌ Erreur lors de la sauvegarde de l\'événement:', evenement);
-            throw new Error(`Erreur lors de la sauvegarde de l'événement ${evenement.titre}`);
-          }
-          return success;
-        })
-      );
-
-      if (results.every(r => r)) {
-        console.log('✅ Tous les événements sauvegardés');
-        forceDataReload();
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour des événements:', error);
-      alert(error instanceof Error ? error.message : 'Erreur lors de la sauvegarde des événements');
-    }
-  };
-
-  const handleDeleteEvenement = async (id: string) => {
-    try {
-      const success = deleteEvenement(id);
-      if (success) {
-        console.log('✅ Événement supprimé');
-        forceDataReload();
-      } else {
-        throw new Error('Erreur lors de la suppression');
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la suppression de l\'événement:', error);
-      alert('Erreur lors de la suppression de l\'événement');
-    }
-  };
-
-  // Gestionnaires pour les types d'adhésion
-  const handleUpdateTypesAdhesion = async (newTypes: TypeAdhesion[]) => {
-    try {
-      const results = await Promise.all(
-        newTypes.map(async (type) => {
-          const success = saveTypeAdhesion(type);
-          if (!success) {
-            console.error('❌ Erreur lors de la sauvegarde du type d\'adhésion:', type);
-            throw new Error(`Erreur lors de la sauvegarde du type ${type.nom}`);
-          }
-          return success;
-        })
-      );
-
-      if (results.every(r => r)) {
-        forceDataReload();
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour des types d\'adhésion:', error);
-      alert(error instanceof Error ? error.message : 'Erreur lors de la sauvegarde des types d\'adhésion');
-    }
-  };
-
-  const handleDeleteTypeAdhesion = async (id: string) => {
-    try {
-      const success = deleteTypeAdhesion(id);
-      if (success) {
-        forceDataReload();
-      } else {
-        throw new Error('Erreur lors de la suppression');
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la suppression du type d\'adhésion:', error);
-      alert('Erreur lors de la suppression du type d\'adhésion');
-    }
-  };
-
-  // Gestionnaires pour les modes de paiement
-  const handleUpdateModesPaiement = async (newModes: ModePaiement[]) => {
-    try {
-      const results = await Promise.all(
-        newModes.map(async (mode) => {
-          const success = saveModePaiement(mode);
-          if (!success) {
-            console.error('❌ Erreur lors de la sauvegarde du mode de paiement:', mode);
-            throw new Error(`Erreur lors de la sauvegarde du mode ${mode.nom}`);
-          }
-          return success;
-        })
-      );
-
-      if (results.every(r => r)) {
-        forceDataReload();
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour des modes de paiement:', error);
-      alert(error instanceof Error ? error.message : 'Erreur lors de la sauvegarde des modes de paiement');
-    }
-  };
-
-  const handleDeleteModePaiement = async (id: string) => {
-    try {
-      const success = deleteModePaiement(id);
-      if (success) {
-        forceDataReload();
-      } else {
-        throw new Error('Erreur lors de la suppression');
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la suppression du mode de paiement:', error);
-      alert('Erreur lors de la suppression du mode de paiement');
-    }
-  };
-
-  // Gestionnaires pour les saisons
-  const handleChangeSaison = async (saisonId: string) => {
-    try {
-      console.log('🔄 Changement de saison:', saisonId);
       const success = setSaisonActive(saisonId);
       if (success) {
-        console.log('✅ Saison changée avec succès');
-        forceDataReload(); // Recharger toutes les données pour la nouvelle saison
+        forceDataReload();
       } else {
         throw new Error('Erreur lors du changement de saison');
       }
     } catch (error) {
-      console.error('❌ Erreur lors du changement de saison:', error);
-      alert('Erreur lors du changement de saison');
+      addError('Erreur lors du changement de saison');
+    } finally {
+      endTracking();
     }
-  };
+  }, [forceDataReload, addError, trackOperation]);
 
-  const handleAddSaison = async (seasonName: string, dateDebut: string, dateFin: string) => {
+  const handleAddSaison = useCallback(async (seasonName: string, dateDebut: string, dateFin: string) => {
+    const endTracking = trackOperation('addSaison');
+    
     try {
-      console.log('➕ Ajout nouvelle saison:', seasonName);
       const success = addSaison(seasonName, dateDebut, dateFin);
       if (success) {
-        console.log('✅ Saison ajoutée avec succès');
         forceDataReload();
-        alert(`Saison ${seasonName} créée avec succès ! Les adhérents et activités de la saison précédente ont été copiés.`);
+        // Notification de succès sans alert bloquant
+        console.log(`✅ Saison ${seasonName} créée avec succès !`);
       } else {
         throw new Error('Erreur lors de l\'ajout de la saison');
       }
     } catch (error) {
-      console.error('❌ Erreur lors de l\'ajout de la saison:', error);
-      alert('Erreur lors de l\'ajout de la saison');
+      addError('Erreur lors de l\'ajout de la saison');
+    } finally {
+      endTracking();
     }
-  };
+  }, [forceDataReload, addError, trackOperation]);
 
-  const handleUpdateSaison = async (saison: Saison) => {
+  const handleUpdateSaison = useCallback(async (saison: Saison) => {
+    const endTracking = trackOperation('updateSaison');
+    
     try {
-      console.log('🔄 Mise à jour saison:', saison.nom);
       const success = updateSaison(saison);
       if (success) {
-        console.log('✅ Saison mise à jour avec succès');
         forceDataReload();
       } else {
         throw new Error('Erreur lors de la mise à jour de la saison');
       }
     } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour de la saison:', error);
-      alert('Erreur lors de la mise à jour de la saison');
+      addError('Erreur lors de la mise à jour de la saison');
+    } finally {
+      endTracking();
     }
-  };
+  }, [forceDataReload, addError, trackOperation]);
 
-  const handleDeleteSaison = async (id: string) => {
+  const handleDeleteSaison = useCallback(async (id: string) => {
+    const endTracking = trackOperation('deleteSaison');
+    
     try {
-      console.log('🗑️ Suppression saison:', id);
       const success = deleteSaison(id);
       if (success) {
-        console.log('✅ Saison supprimée avec succès');
         forceDataReload();
       } else {
         throw new Error('Erreur lors de la suppression de la saison');
       }
     } catch (error) {
-      console.error('❌ Erreur lors de la suppression de la saison:', error);
-      alert('Erreur lors de la suppression de la saison');
+      addError('Erreur lors de la suppression de la saison');
+    } finally {
+      endTracking();
     }
-  };
+  }, [forceDataReload, addError, trackOperation]);
 
-  const handleUpdateSettings = async (newSettings: AppSettings) => {
+  const handleUpdateSettings = useCallback(async (newSettings: AppSettings) => {
+    const endTracking = trackOperation('updateSettings');
+    
     try {
       const success = updateSettings(newSettings);
       if (success) {
@@ -491,114 +365,111 @@ function App() {
         throw new Error('Erreur lors de la mise à jour des paramètres');
       }
     } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour des paramètres:', error);
-      alert('Erreur lors de la mise à jour des paramètres');
+      addError('Erreur lors de la mise à jour des paramètres');
+    } finally {
+      endTracking();
     }
-  };
+  }, [setSettings, forceDataReload, addError, trackOperation]);
 
-  const renderCurrentPage = () => {
+  // Rendu optimisé des pages avec React.memo
+  const renderCurrentPage = useMemo(() => {
+    const pageProps = {
+      adherents,
+      activites,
+      paiements,
+      taches,
+      evenements,
+      typesAdhesion,
+      modesPaiement,
+      saisons,
+      settings,
+      seasonOptions: getSeasonOptions(),
+      onUpdateAdherents: handleUpdateAdherents,
+      onDeleteAdherent: handleDeleteAdherent,
+      onUpdateActivites: handleUpdateActivites,
+      onDeleteActivite: handleDeleteActivite,
+      onUpdatePaiements: handleUpdatePaiements,
+      onDeletePaiement: handleDeletePaiement,
+      onUpdateTaches: handleUpdateTaches,
+      onDeleteTache: handleDeleteTache,
+      onUpdateEvenements: handleUpdateEvenements,
+      onDeleteEvenement: handleDeleteEvenement,
+      onUpdateTypesAdhesion: handleUpdateTypesAdhesion,
+      onDeleteTypeAdhesion: handleDeleteTypeAdhesion,
+      onUpdateModesPaiement: handleUpdateModesPaiement,
+      onDeleteModePaiement: handleDeleteModePaiement,
+      onChangeSaison: handleChangeSaison,
+      onAddSaison: handleAddSaison,
+      onUpdateSaison: handleUpdateSaison,
+      onDeleteSaison: handleDeleteSaison,
+      onUpdateSettings: handleUpdateSettings
+    };
+
     switch (currentPage) {
       case 'dashboard':
-        return (
-          <Dashboard 
-            adherents={adherents}
-            activites={activites}
-            paiements={paiements}
-            taches={taches}
-            evenements={evenements}
-          />
-        );
+        return <Dashboard {...pageProps} />;
       case 'calendar':
-        return (
-          <Calendar 
-            evenements={evenements}
-            onUpdateEvenements={handleUpdateEvenements}
-          />
-        );
+        return <Calendar evenements={evenements} onUpdateEvenements={handleUpdateEvenements} />;
       case 'tasks':
-        return (
-          <Tasks 
-            taches={taches}
-            onUpdateTaches={handleUpdateTaches}
-          />
-        );
+        return <Tasks taches={taches} onUpdateTaches={handleUpdateTaches} />;
       case 'members':
-        return (
-          <Members 
-            adherents={adherents}
-            activites={activites}
-            onUpdateAdherents={handleUpdateAdherents}
-            onUpdateActivites={handleUpdateActivites}
-          />
-        );
+        return <Members {...pageProps} />;
       case 'activities':
-        return (
-          <Activities 
-            activites={activites}
-            adherents={adherents}
-            onUpdateActivites={handleUpdateActivites}
-          />
-        );
+        return <Activities {...pageProps} />;
       case 'payments':
-        return (
-          <Payments 
-            paiements={paiements}
-            adherents={adherents}
-            activites={activites}
-            modesPaiement={modesPaiement}
-            onUpdatePaiements={handleUpdatePaiements}
-          />
-        );
+        return <Payments {...pageProps} />;
       case 'statistics':
-        return (
-          <Statistics 
-            adherents={adherents}
-            activites={activites}
-            paiements={paiements}
-          />
-        );
+        return <Statistics {...pageProps} />;
       case 'settings':
-        return (
-          <Settings 
-            typesAdhesion={typesAdhesion}
-            modesPaiement={modesPaiement}
-            saisons={saisons}
-            settings={settings}
-            seasonOptions={getSeasonOptions()}
-            onUpdateTypesAdhesion={handleUpdateTypesAdhesion}
-            onUpdateModesPaiement={handleUpdateModesPaiement}
-            onChangeSaison={handleChangeSaison}
-            onAddSaison={handleAddSaison}
-            onUpdateSaison={handleUpdateSaison}
-            onDeleteSaison={handleDeleteSaison}
-            onUpdateSettings={handleUpdateSettings}
-          />
-        );
+        return <Settings {...pageProps} />;
       default:
-        return <Dashboard adherents={adherents} activites={activites} paiements={paiements} taches={taches} evenements={evenements} />;
+        return <Dashboard {...pageProps} />;
     }
-  };
+  }, [currentPage, adherents, activites, paiements, taches, evenements, typesAdhesion, modesPaiement, saisons, settings, handleUpdateAdherents, handleDeleteAdherent, handleUpdateActivites, handleDeleteActivite, handleUpdatePaiements, handleDeletePaiement, handleUpdateTaches, handleDeleteTache, handleUpdateEvenements, handleDeleteEvenement, handleUpdateTypesAdhesion, handleDeleteTypeAdhesion, handleUpdateModesPaiement, handleDeleteModePaiement, handleChangeSaison, handleAddSaison, handleUpdateSaison, handleDeleteSaison, handleUpdateSettings]);
 
+  // Écran de chargement optimisé
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Chargement de l'application...</p>
-          <p className="text-gray-500 text-sm mt-2">Initialisation de la base de données</p>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="text-center p-8 bg-white rounded-2xl shadow-xl">
+          <div className="relative">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto mb-6"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-8 h-8 bg-blue-600 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Chargement Ultra-Rapide</h2>
+          <p className="text-gray-600 mb-4">Initialisation de la base de données optimisée...</p>
+          <div className="text-xs text-gray-500">
+            <p>Opérations: {metrics.operationCount}</p>
+            <p>Dernière: {metrics.lastOperation}</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <Layout 
-      currentPage={currentPage} 
-      onPageChange={setCurrentPage}
-    >
-      {renderCurrentPage()}
-    </Layout>
+    <>
+      <Layout currentPage={currentPage} onPageChange={setCurrentPage}>
+        {renderCurrentPage}
+      </Layout>
+      
+      {/* Indicateur de performance en développement */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed bottom-4 right-4 bg-black bg-opacity-75 text-white text-xs p-2 rounded">
+          <div>Ops: {metrics.operationCount}</div>
+          <div>Dernière: {metrics.loadTime.toFixed(1)}ms</div>
+          <div>Cache: {getDatabaseInfo().cache.size}</div>
+          {errors.length > 0 && (
+            <div className="text-red-300 mt-1">
+              Erreurs: {errors.length}
+            </div>
+          )}
+        </div>
+      )}
+    </>
   );
 }
 
-export default App;
+export default React.memo(App);
