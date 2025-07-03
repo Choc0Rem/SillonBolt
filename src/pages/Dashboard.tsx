@@ -5,14 +5,19 @@ import { Users, Activity, CreditCard, CheckSquare, TrendingUp, AlertCircle, Cloc
 import { EvenementAgenda } from '../types';
 
 interface DashboardProps {
-  adherents: any[];
-  activites: any[];
-  paiements: any[];
-  taches: any[];
-  evenements: EvenementAgenda[];
+  data: {
+    adherents: any[];
+    activites: any[];
+    paiements: any[];
+    taches: any[];
+    evenements: EvenementAgenda[];
+  };
+  updateData: (newData: any) => void;
 }
 
-export default function Dashboard({ adherents, activites, paiements, taches, evenements }: DashboardProps) {
+export default function Dashboard({ data, updateData }: DashboardProps) {
+  const { adherents, activites, paiements, taches, evenements } = data;
+  
   const paiementsEnAttente = paiements.filter(p => p.statut === 'En attente').length;
   const totalRevenu = paiements.filter(p => p.statut === 'Payé').reduce((acc, p) => acc + p.montant, 0);
   const totalEnAttente = paiements.filter(p => p.statut === 'En attente').reduce((acc, p) => acc + p.montant, 0);
