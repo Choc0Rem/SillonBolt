@@ -82,10 +82,26 @@ export interface Saison {
 
 export interface AppSettings {
   saisonActive: string;
+  theme?: 'light' | 'dark';
+  notifications?: boolean;
+  language?: string;
 }
 
 export interface TypeEvenement {
   id: string;
   nom: string;
   couleur: string;
+}
+
+export interface AppData {
+  adherents: Adherent[];
+  activites: Activite[];
+  paiements: Paiement[];
+  taches: Tache[];
+  evenements: EvenementAgenda[];
+  saisons: Saison[];
+  typesAdhesion: TypeAdhesion[];
+  modesPaiement: ModePaiement[];
+  typesEvenement: TypeEvenement[];
+  settings: AppSettings;
 }

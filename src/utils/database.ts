@@ -1,5 +1,5 @@
 // Système de base de données ULTRA-OPTIMISÉ utilisant localStorage
-import { Adherent, Activite, Paiement, Tache, EvenementAgenda, TypeAdhesion, ModePaiement, Saison, AppSettings, TypeEvenement } from '../types';
+import { Adherent, Activite, Paiement, Tache, EvenementAgenda, TypeAdhesion, ModePaiement, Saison, AppSettings, TypeEvenement, AppData } from '../types';
 
 // Clés pour localStorage avec compression
 const STORAGE_KEYS = {
@@ -427,7 +427,12 @@ const createDefaultData = async (): Promise<void> => {
       active: true,
       terminee: false
     }],
-    settings: { saisonActive: currentSeason },
+    settings: { 
+      saisonActive: currentSeason,
+      theme: 'light' as const,
+      notifications: true,
+      language: 'fr'
+    },
     typesAdhesion: [
       { id: 'type_1', nom: 'Individuelle', prix: 50 },
       { id: 'type_2', nom: 'Famille', prix: 80 }
@@ -477,7 +482,8 @@ export const setSaisonActive = (saisonId: string): boolean => {
     if (!saison) return false;
 
     const updatedSaisons = saisons.map(s => ({ ...s, active: s.id === saisonId }));
-    const updatedSettings = { saisonActive: saison.nom };
+    const currentSettings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '2025-2026' });
+    const updatedSettings = { ...currentSettings, saisonActive: saison.nom };
 
     const success = saveToStorage(STORAGE_KEYS.SAISONS, updatedSaisons) && 
                    saveToStorage(STORAGE_KEYS.SETTINGS, updatedSettings);
@@ -534,7 +540,8 @@ export const updateSaison = (saison: Saison): boolean => {
     const success = saveToStorage(STORAGE_KEYS.SAISONS, updatedSaisons);
     
     if (success && saison.active) {
-      saveToStorage(STORAGE_KEYS.SETTINGS, { saisonActive: saison.nom });
+      const currentSettings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '2025-2026' });
+      saveToStorage(STORAGE_KEYS.SETTINGS, { ...currentSettings, saisonActive: saison.nom });
       ultraCache.invalidate();
     }
     
@@ -592,6 +599,15 @@ const createCRUDOperations = <T extends { id: string; saison?: string }>(
     return data.filter(item => item.saison === saisonActive);
   },
   
+  setAll: (items: T[]): boolean => {
+    try {
+      return saveToStorage(storageKey, items);
+    } catch (error) {
+      ErrorHandler.handle(`Sauvegarde complète ${storageKey}`, error);
+      return false;
+    }
+  },
+  
   save: (item: T): boolean => {
     try {
       const allItems = loadFromStorage<T[]>(storageKey, []);
@@ -636,42 +652,120 @@ const typeEvenementOps = createCRUDOperations<TypeEvenement>(STORAGE_KEYS.TYPES_
 
 // Export des fonctions optimisées
 export const getAdherents = adherentOps.getAll;
+export const setAdherents = adherentOps.setAll;
 export const saveAdherent = adherentOps.save;
 export const deleteAdherent = adherentOps.delete;
 
 export const getActivites = activiteOps.getAll;
+export const setActivites = activiteOps.setAll;
 export const saveActivite = activiteOps.save;
 export const deleteActivite = activiteOps.delete;
 
 export const getPaiements = paiementOps.getAll;
+export const setPaiements = paiementOps.setAll;
 export const savePaiement = paiementOps.save;
 export const deletePaiement = paiementOps.delete;
 
 export const getTaches = tacheOps.getAll;
+export const setTaches = tacheOps.setAll;
 export const saveTache = tacheOps.save;
 export const deleteTache = tacheOps.delete;
 
 export const getEvenements = evenementOps.getAll;
+export const setEvenements = evenementOps.setAll;
 export const saveEvenement = evenementOps.save;
 export const deleteEvenement = evenementOps.delete;
 
 export const getTypesAdhesion = typeAdhesionOps.getAll;
+export const setTypesAdhesion = typeAdhesionOps.setAll;
 export const saveTypeAdhesion = typeAdhesionOps.save;
 export const deleteTypeAdhesion = typeAdhesionOps.delete;
 
 export const getModesPaiement = modePaiementOps.getAll;
+export const setModesPaiement = modePaiementOps.setAll;
 export const saveModePaiement = modePaiementOps.save;
 export const deleteModePaiement = modePaiementOps.delete;
 
 export const getTypesEvenement = typeEvenementOps.getAll;
+export const setTypesEvenement = typeEvenementOps.setAll;
 export const saveTypeEvenement = typeEvenementOps.save;
 export const deleteTypeEvenement = typeEvenementOps.delete;
 
 export const getSettings = (): AppSettings => 
-  loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '2025-2026' });
+  loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
+    saisonActive: '2025-2026',
+    theme: 'light',
+    notifications: true,
+    language: 'fr'
+  });
 
 export const updateSettings = (settings: AppSettings): boolean => 
   saveToStorage(STORAGE_KEYS.SETTINGS, settings);
+
+// Nouvelles fonctions loadData et saveData
+export const loadData = (): AppData => {
+  try {
+    return {
+      adherents: getAdherents(),
+      activites: getActivites(),
+      paiements: getPaiements(),
+      taches: getTaches(),
+      evenements: getEvenements(),
+      saisons: getSaisons(),
+      typesAdhesion: getTypesAdhesion(),
+      modesPaiement: getModesPaiement(),
+      typesEvenement: getTypesEvenement(),
+      settings: getSettings()
+    };
+  } catch (error) {
+    ErrorHandler.handle('Chargement des données', error);
+    return {
+      adherents: [],
+      activites: [],
+      paiements: [],
+      taches: [],
+      evenements: [],
+      saisons: [],
+      typesAdhesion: [],
+      modesPaiement: [],
+      typesEvenement: [],
+      settings: { 
+        saisonActive: '2025-2026',
+        theme: 'light',
+        notifications: true,
+        language: 'fr'
+      }
+    };
+  }
+};
+
+export const saveData = (data: AppData): boolean => {
+  try {
+    const results = [
+      setAdherents(data.adherents),
+      setActivites(data.activites),
+      setPaiements(data.paiements),
+      setTaches(data.taches),
+      setEvenements(data.evenements),
+      saveToStorage(STORAGE_KEYS.SAISONS, data.saisons),
+      setTypesAdhesion(data.typesAdhesion),
+      setModesPaiement(data.modesPaiement),
+      setTypesEvenement(data.typesEvenement),
+      updateSettings(data.settings)
+    ];
+    
+    const success = results.every(result => result);
+    
+    if (success) {
+      ultraCache.invalidate();
+    }
+    
+    return success;
+  } catch (error) {
+    ErrorHandler.handle('Sauvegarde des données', error);
+    return false;
+  }
+};
 
 // Fonctions utilitaires avancées
 export const getDatabaseInfo = () => ({
