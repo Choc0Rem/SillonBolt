@@ -9,7 +9,7 @@ interface TasksProps {
   onUpdateTaches: (taches: Tache[]) => void;
 }
 
-export default function Tasks({ taches, onUpdateTaches }: TasksProps) {
+export default function Tasks({ taches = [], onUpdateTaches }: TasksProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'Urgent' | 'Important' | 'Normal'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'À faire' | 'En cours' | 'Terminé'>('all');
