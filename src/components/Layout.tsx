@@ -134,8 +134,8 @@ const Sidebar = memo(({ currentPage, onPageChange }: {
     {/* Footer de la sidebar */}
     <div className="absolute bottom-4 left-4 right-4">
       <div className="text-xs text-gray-400 text-center">
-        <p>Version 3.0 Ultra-Optimisée</p>
-        <p className="text-green-500">⚡ Performance Max</p>
+        <p>Logiciel de Gestion</p>
+        <p className="text-blue-500">Association</p>
       </div>
     </div>
   </div>

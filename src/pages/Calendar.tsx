@@ -95,6 +95,31 @@ export default function Calendar({ evenements = [], onUpdateEvenements }: Calend
     });
   };
 
+  // Nouvelle fonction pour obtenir les événements qui se chevauchent avec une heure donnée
+  const getEventsForDateAndHour = (date: Date, hour: number) => {
+    if (!evenements || !Array.isArray(evenements)) return [];
+    
+    return evenements.filter(event => {
+      const eventStart = new Date(event.dateDebut);
+      const eventEnd = new Date(event.dateFin);
+      
+      // Vérifier si l'événement est le même jour
+      if (eventStart.toDateString() !== date.toDateString()) return false;
+      
+      const eventStartHour = eventStart.getHours();
+      const eventEndHour = eventEnd.getHours();
+      const eventStartMinutes = eventStart.getMinutes();
+      const eventEndMinutes = eventEnd.getMinutes();
+      
+      // Calculer l'heure de début et de fin en décimal
+      const startTime = eventStartHour + (eventStartMinutes / 60);
+      const endTime = eventEndHour + (eventEndMinutes / 60);
+      
+      // Vérifier si l'heure actuelle est dans la plage de l'événement
+      return hour >= startTime && hour < endTime;
+    });
+  };
+
   const navigateMonth = (direction: 'prev' | 'next') => {
     setCurrentDate(prev => {
       const newDate = new Date(prev);
@@ -331,31 +356,51 @@ export default function Calendar({ evenements = [], onUpdateEvenements }: Calend
                 {hour.toString().padStart(2, '0')}:00
               </div>
               {weekDays.map((day, dayIndex) => {
-                const dayEvents = getEventsForDate(day).filter(event => {
-                  const eventHour = new Date(event.dateDebut).getHours();
-                  return eventHour === hour;
-                });
+                const hourEvents = getEventsForDateAndHour(day, hour);
                 
                 return (
                   <div
                     key={dayIndex}
-                    className="min-h-[60px] p-1 border border-gray-200 cursor-pointer hover:bg-gray-50"
+                    className="min-h-[60px] p-1 border border-gray-200 cursor-pointer hover:bg-gray-50 relative"
                     onClick={() => {
                       const clickedDate = new Date(day);
                       clickedDate.setHours(hour, 0, 0, 0);
                       handleDateClick(clickedDate);
                     }}
                   >
-                    {dayEvents.map(event => (
-                      <div
-                        key={event.id}
-                        className="text-xs p-1 rounded text-white mb-1 truncate"
-                        style={{ backgroundColor: getEventTypeColor(event.type) }}
-                        title={event.titre}
-                      >
-                        {event.titre}
-                      </div>
-                    ))}
+                    {hourEvents.map(event => {
+                      const eventStart = new Date(event.dateDebut);
+                      const eventEnd = new Date(event.dateFin);
+                      const startHour = eventStart.getHours() + (eventStart.getMinutes() / 60);
+                      const endHour = eventEnd.getHours() + (eventEnd.getMinutes() / 60);
+                      const duration = endHour - startHour;
+                      
+                      // Calculer la position et la hauteur de l'événement
+                      const isFirstHour = hour === Math.floor(startHour);
+                      const height = Math.min(duration * 60, (24 - hour) * 60); // hauteur en pixels
+                      
+                      return isFirstHour ? (
+                        <div
+                          key={event.id}
+                          className="absolute left-1 right-1 text-xs p-1 rounded text-white z-10 overflow-hidden"
+                          style={{ 
+                            backgroundColor: getEventTypeColor(event.type),
+                            height: `${Math.max(height, 20)}px`,
+                            top: `${(startHour - hour) * 60}px`
+                          }}
+                          title={`${event.titre} - ${formatTime(event.dateDebut)} à ${formatTime(event.dateFin)}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(event);
+                          }}
+                        >
+                          <div className="font-medium truncate">{event.titre}</div>
+                          <div className="text-xs opacity-90 truncate">
+                            {formatTime(event.dateDebut)} - {formatTime(event.dateFin)}
+                          </div>
+                        </div>
+                      ) : null;
+                    })}
                   </div>
                 );
               })}
@@ -378,39 +423,55 @@ export default function Calendar({ evenements = [], onUpdateEvenements }: Calend
           </div>
           
           {hours.map(hour => {
-            const hourEvents = dayEvents.filter(event => {
-              const eventHour = new Date(event.dateDebut).getHours();
-              return eventHour === hour;
-            });
+            const hourEvents = getEventsForDateAndHour(currentDate, hour);
             
             return (
-              <div key={hour} className="flex border-b border-gray-200">
+              <div key={hour} className="flex border-b border-gray-200 relative">
                 <div className="w-20 p-2 text-sm text-gray-500 bg-gray-50 border-r">
                   {hour.toString().padStart(2, '0')}:00
                 </div>
                 <div 
-                  className="flex-1 min-h-[60px] p-2 cursor-pointer hover:bg-gray-50"
+                  className="flex-1 min-h-[60px] p-2 cursor-pointer hover:bg-gray-50 relative"
                   onClick={() => {
                     const clickedDate = new Date(currentDate);
                     clickedDate.setHours(hour, 0, 0, 0);
                     handleDateClick(clickedDate);
                   }}
                 >
-                  {hourEvents.map(event => (
-                    <div
-                      key={event.id}
-                      className="p-2 rounded text-white mb-1"
-                      style={{ backgroundColor: getEventTypeColor(event.type) }}
-                    >
-                      <div className="font-medium">{event.titre}</div>
-                      <div className="text-xs opacity-90">
-                        {formatTime(event.dateDebut)} - {formatTime(event.dateFin)}
+                  {hourEvents.map(event => {
+                    const eventStart = new Date(event.dateDebut);
+                    const eventEnd = new Date(event.dateFin);
+                    const startHour = eventStart.getHours() + (eventStart.getMinutes() / 60);
+                    const endHour = eventEnd.getHours() + (eventEnd.getMinutes() / 60);
+                    const duration = endHour - startHour;
+                    
+                    const isFirstHour = hour === Math.floor(startHour);
+                    const height = Math.min(duration * 60, (24 - hour) * 60);
+                    
+                    return isFirstHour ? (
+                      <div
+                        key={event.id}
+                        className="absolute left-2 right-2 p-2 rounded text-white z-10"
+                        style={{ 
+                          backgroundColor: getEventTypeColor(event.type),
+                          height: `${Math.max(height, 40)}px`,
+                          top: `${(startHour - hour) * 60 + 8}px`
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(event);
+                        }}
+                      >
+                        <div className="font-medium">{event.titre}</div>
+                        <div className="text-xs opacity-90">
+                          {formatTime(event.dateDebut)} - {formatTime(event.dateFin)}
+                        </div>
+                        {event.lieu && (
+                          <div className="text-xs opacity-90">{event.lieu}</div>
+                        )}
                       </div>
-                      {event.lieu && (
-                        <div className="text-xs opacity-90">{event.lieu}</div>
-                      )}
-                    </div>
-                  ))}
+                    ) : null;
+                  })}
                 </div>
               </div>
             );
