@@ -2,22 +2,17 @@ import React from 'react';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import { Users, Activity, CreditCard, CheckSquare, TrendingUp, AlertCircle, Clock, Flag, Calendar as CalendarIcon, MapPin, Euro, TrendingDown } from 'lucide-react';
-import { EvenementAgenda } from '../types';
+import { EvenementAgenda, Adherent, Activite, Paiement, Tache } from '../types';
 
 interface DashboardProps {
-  data: {
-    adherents: any[];
-    activites: any[];
-    paiements: any[];
-    taches: any[];
-    evenements: EvenementAgenda[];
-  };
-  updateData: (newData: any) => void;
+  adherents: Adherent[];
+  activites: Activite[];
+  paiements: Paiement[];
+  taches: Tache[];
+  evenements: EvenementAgenda[];
 }
 
-export default function Dashboard({ data, updateData }: DashboardProps) {
-  const { adherents, activites, paiements, taches, evenements } = data;
-  
+export default function Dashboard({ adherents = [], activites = [], paiements = [], taches = [], evenements = [] }: DashboardProps) {
   const paiementsEnAttente = paiements.filter(p => p.statut === 'En attente').length;
   const totalRevenu = paiements.filter(p => p.statut === 'Payé').reduce((acc, p) => acc + p.montant, 0);
   const totalEnAttente = paiements.filter(p => p.statut === 'En attente').reduce((acc, p) => acc + p.montant, 0);

@@ -105,3 +105,5 @@ export interface AppData {
   typesEvenement: TypeEvenement[];
   settings: AppSettings;
 }
+
+export type PageType = 'dashboard' | 'calendar' | 'tasks' | 'members' | 'activities' | 'payments' | 'statistics' | 'settings';

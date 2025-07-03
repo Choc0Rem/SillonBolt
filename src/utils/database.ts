@@ -402,7 +402,12 @@ export const initDatabase = async (): Promise<boolean> => {
 // Vérification d'intégrité rapide
 const quickIntegrityCheck = async (): Promise<void> => {
   try {
-    const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '2025-2026' });
+    const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
+      saisonActive: '2025-2026',
+      theme: 'light',
+      notifications: true,
+      language: 'fr'
+    });
     const saisons = loadFromStorage<Saison[]>(STORAGE_KEYS.SAISONS, []);
     
     if (saisons.length === 0 || !settings.saisonActive) {
@@ -470,7 +475,12 @@ const createDefaultData = async (): Promise<void> => {
 export const getSaisons = (): Saison[] => loadFromStorage<Saison[]>(STORAGE_KEYS.SAISONS, []);
 export const getSeasonOptions = (): string[] => generateSeasonOptions();
 export const getSaisonActive = (): string => {
-  const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '2025-2026' });
+  const settings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
+    saisonActive: '2025-2026',
+    theme: 'light',
+    notifications: true,
+    language: 'fr'
+  });
   return settings.saisonActive || '2025-2026';
 };
 
@@ -482,7 +492,12 @@ export const setSaisonActive = (saisonId: string): boolean => {
     if (!saison) return false;
 
     const updatedSaisons = saisons.map(s => ({ ...s, active: s.id === saisonId }));
-    const currentSettings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '2025-2026' });
+    const currentSettings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
+      saisonActive: '2025-2026',
+      theme: 'light',
+      notifications: true,
+      language: 'fr'
+    });
     const updatedSettings = { ...currentSettings, saisonActive: saison.nom };
 
     const success = saveToStorage(STORAGE_KEYS.SAISONS, updatedSaisons) && 
@@ -540,7 +555,12 @@ export const updateSaison = (saison: Saison): boolean => {
     const success = saveToStorage(STORAGE_KEYS.SAISONS, updatedSaisons);
     
     if (success && saison.active) {
-      const currentSettings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { saisonActive: '2025-2026' });
+      const currentSettings = loadFromStorage<AppSettings>(STORAGE_KEYS.SETTINGS, { 
+        saisonActive: '2025-2026',
+        theme: 'light',
+        notifications: true,
+        language: 'fr'
+      });
       saveToStorage(STORAGE_KEYS.SETTINGS, { ...currentSettings, saisonActive: saison.nom });
       ultraCache.invalidate();
     }

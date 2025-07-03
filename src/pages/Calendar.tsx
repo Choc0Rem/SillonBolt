@@ -10,7 +10,7 @@ interface CalendarProps {
   onUpdateEvenements: (evenements: EvenementAgenda[]) => void;
 }
 
-export default function Calendar({ evenements, onUpdateEvenements }: CalendarProps) {
+export default function Calendar({ evenements = [], onUpdateEvenements }: CalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<'month' | 'week' | 'day'>('month');
   const [showModal, setShowModal] = useState(false);
@@ -88,6 +88,7 @@ export default function Calendar({ evenements, onUpdateEvenements }: CalendarPro
   };
 
   const getEventsForDate = (date: Date) => {
+    if (!evenements || !Array.isArray(evenements)) return [];
     return evenements.filter(event => {
       const eventDate = new Date(event.dateDebut);
       return eventDate.toDateString() === date.toDateString();
