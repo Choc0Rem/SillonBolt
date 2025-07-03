@@ -18,6 +18,7 @@ function App() {
     members: [],
     activities: [],
     payments: [],
+    evenements: [],
     settings: {
       theme: 'light',
       notifications: true,
@@ -68,7 +69,7 @@ function App() {
       case 'members':
         return <Members members={data.members} updateMembers={(members) => updateData({ members })} />;
       case 'calendar':
-        return <Calendar tasks={data.tasks} activities={data.activities} />;
+        return <Calendar evenements={data.evenements} onUpdateEvenements={(evenements) => updateData({ evenements })} />;
       case 'activities':
         return <Activities activities={data.activities} updateActivities={(activities) => updateData({ activities })} />;
       case 'statistics':
