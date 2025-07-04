@@ -96,12 +96,6 @@ export default function Settings({
   };
 
   const handleDeleteMembership = (id: string) => {
-    const typeToDelete = typesAdhesion.find(t => t.id === id);
-    if (typeToDelete && (typeToDelete.nom === 'Individuelle' || typeToDelete.nom === 'Famille')) {
-      alert('Impossible de supprimer les types d\'adhésion par défaut');
-      return;
-    }
-    
     if (confirm('Êtes-vous sûr de vouloir supprimer ce type d\'adhésion ?')) {
       onUpdateTypesAdhesion(typesAdhesion.filter(t => t.id !== id));
     }
@@ -375,11 +369,9 @@ export default function Settings({
                       <Button variant="ghost" size="sm" onClick={() => handleEditMembership(type)}>
                         <Edit className="w-4 h-4" />
                       </Button>
-                      {!(type.nom === 'Individuelle' || type.nom === 'Famille') && (
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteMembership(type.id)}>
-                          <Trash2 className="w-4 h-4 text-red-600" />
-                        </Button>
-                      )}
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteMembership(type.id)}>
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                      </Button>
                     </div>
                   </td>
                 </tr>

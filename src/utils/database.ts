@@ -99,6 +99,7 @@ class DataCompressor {
     try {
       const json = JSON.stringify(data);
       // Compression basique par remplacement de patterns fréquents
+      // ATTENTION: Ne pas remplacer true/false dans les années (ex: 2025)
       return json
         .replace(/"id":/g, '"i":')
         .replace(/"nom":/g, '"n":')
@@ -109,8 +110,9 @@ class DataCompressor {
         .replace(/"createdAt":/g, '"c":')
         .replace(/"adherents":/g, '"a":')
         .replace(/"activites":/g, '"ac":')
-        .replace(/true/g, '1')
-        .replace(/false/g, '0');
+        // Remplacer true/false seulement quand ils sont des valeurs booléennes
+        .replace(/:\s*true/g, ':1')
+        .replace(/:\s*false/g, ':0');
     } catch {
       return JSON.stringify(data);
     }
@@ -128,8 +130,9 @@ class DataCompressor {
         .replace(/"c":/g, '"createdAt":')
         .replace(/"a":/g, '"adherents":')
         .replace(/"ac":/g, '"activites":')
-        .replace(/(?<!")1(?!")/g, 'true')
-        .replace(/(?<!")0(?!")/g, 'false');
+        // Restaurer true/false seulement pour les valeurs booléennes
+        .replace(/:1/g, ':true')
+        .replace(/:0/g, ':false');
       
       return JSON.parse(restored);
     } catch {

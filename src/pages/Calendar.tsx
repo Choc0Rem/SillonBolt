@@ -244,14 +244,34 @@ export default function Calendar({ evenements = [], onUpdateEvenements }: Calend
     }
   };
 
-  const handleDateClick = (date: Date) => {
+  const handleDateClick = (date: Date, hour?: number) => {
+    // Synchronisation : mettre à jour currentDate et changer de vue si nécessaire
+    setCurrentDate(new Date(date));
     setSelectedDate(date);
+    
+    // Créer les dates par défaut
+    const startDate = new Date(date);
+    if (hour !== undefined) {
+      startDate.setHours(hour, 0, 0, 0);
+    } else {
+      startDate.setHours(9, 0, 0, 0); // 9h par défaut
+    }
+    
+    const endDate = new Date(startDate);
+    endDate.setHours(startDate.getHours() + 1); // +1 heure par défaut
+    
     setFormData({
       ...formData,
-      dateDebut: date.toISOString().slice(0, 16),
-      dateFin: new Date(date.getTime() + 60 * 60 * 1000).toISOString().slice(0, 16)
+      dateDebut: startDate.toISOString().slice(0, 16),
+      dateFin: endDate.toISOString().slice(0, 16)
     });
     setShowModal(true);
+  };
+
+  const handleDayClick = (date: Date) => {
+    // Synchronisation : aller à la vue jour pour cette date
+    setCurrentDate(new Date(date));
+    setView('day');
   };
 
   const getEventTypeColor = (type: string) => {
@@ -295,6 +315,7 @@ export default function Calendar({ evenements = [], onUpdateEvenements }: Calend
               <div
                 key={index}
                 onClick={() => dayInfo.isCurrentMonth && handleDateClick(dayInfo.date)}
+                onDoubleClick={() => dayInfo.isCurrentMonth && handleDayClick(dayInfo.date)}
                 className={`min-h-[100px] p-2 border border-gray-200 cursor-pointer hover:bg-gray-50 ${
                   !dayInfo.isCurrentMonth ? 'bg-gray-100 text-gray-400' : ''
                 } ${isToday ? 'bg-blue-50 border-blue-300' : ''}`}
@@ -307,9 +328,13 @@ export default function Calendar({ evenements = [], onUpdateEvenements }: Calend
                   {dayEvents.slice(0, 3).map(event => (
                     <div
                       key={event.id}
-                      className="text-xs p-1 rounded text-white truncate"
+                      className="text-xs p-1 rounded text-white truncate cursor-pointer"
                       style={{ backgroundColor: getEventTypeColor(event.type) }}
-                      title={event.titre}
+                      title={`${event.titre} - ${formatTime(event.dateDebut)} à ${formatTime(event.dateFin)}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEdit(event);
+                      }}
                     >
                       {event.titre}
                     </div>
@@ -339,7 +364,12 @@ export default function Calendar({ evenements = [], onUpdateEvenements }: Calend
           {weekDays.map((day, index) => (
             <div key={index} className="p-2 text-center font-semibold text-gray-600 bg-gray-50">
               <div>{days[day.getDay()]}</div>
-              <div className="text-lg">{day.getDate()}</div>
+              <div 
+                className="text-lg cursor-pointer hover:text-blue-600"
+                onClick={() => handleDayClick(day)}
+              >
+                {day.getDate()}
+              </div>
             </div>
           ))}
           
@@ -355,11 +385,7 @@ export default function Calendar({ evenements = [], onUpdateEvenements }: Calend
                   <div
                     key={dayIndex}
                     className="min-h-[60px] p-1 border border-gray-200 cursor-pointer hover:bg-gray-50 relative"
-                    onClick={() => {
-                      const clickedDate = new Date(day);
-                      clickedDate.setHours(hour, 0, 0, 0);
-                      handleDateClick(clickedDate);
-                    }}
+                    onClick={() => handleDateClick(day, hour)}
                   >
                     {hourEvents.map(event => {
                       const eventStart = new Date(event.dateDebut);
@@ -375,7 +401,7 @@ export default function Calendar({ evenements = [], onUpdateEvenements }: Calend
                       return isFirstHour ? (
                         <div
                           key={event.id}
-                          className="absolute left-1 right-1 text-xs p-1 rounded text-white z-10 overflow-hidden"
+                          className="absolute left-1 right-1 text-xs p-1 rounded text-white z-10 overflow-hidden cursor-pointer"
                           style={{ 
                             backgroundColor: getEventTypeColor(event.type),
                             height: `${Math.max(height, 20)}px`,
@@ -424,11 +450,7 @@ export default function Calendar({ evenements = [], onUpdateEvenements }: Calend
                 </div>
                 <div 
                   className="flex-1 min-h-[60px] p-2 cursor-pointer hover:bg-gray-50 relative"
-                  onClick={() => {
-                    const clickedDate = new Date(currentDate);
-                    clickedDate.setHours(hour, 0, 0, 0);
-                    handleDateClick(clickedDate);
-                  }}
+                  onClick={() => handleDateClick(currentDate, hour)}
                 >
                   {hourEvents.map(event => {
                     const eventStart = new Date(event.dateDebut);
@@ -443,7 +465,7 @@ export default function Calendar({ evenements = [], onUpdateEvenements }: Calend
                     return isFirstHour ? (
                       <div
                         key={event.id}
-                        className="absolute left-2 right-2 p-2 rounded text-white z-10"
+                        className="absolute left-2 right-2 p-2 rounded text-white z-10 cursor-pointer"
                         style={{ 
                           backgroundColor: getEventTypeColor(event.type),
                           height: `${Math.max(height, 40)}px`,
