@@ -95,7 +95,6 @@ export default function Calendar({ evenements = [], onUpdateEvenements }: Calend
     });
   };
 
-  // Nouvelle fonction pour obtenir les événements qui se chevauchent avec une heure donnée
   const getEventsForDateAndHour = (date: Date, hour: number) => {
     if (!evenements || !Array.isArray(evenements)) return [];
     
@@ -106,17 +105,11 @@ export default function Calendar({ evenements = [], onUpdateEvenements }: Calend
       // Vérifier si l'événement est le même jour
       if (eventStart.toDateString() !== date.toDateString()) return false;
       
-      const eventStartHour = eventStart.getHours();
-      const eventEndHour = eventEnd.getHours();
-      const eventStartMinutes = eventStart.getMinutes();
-      const eventEndMinutes = eventEnd.getMinutes();
-      
-      // Calculer l'heure de début et de fin en décimal
-      const startTime = eventStartHour + (eventStartMinutes / 60);
-      const endTime = eventEndHour + (eventEndMinutes / 60);
+      const eventStartHour = eventStart.getHours() + (eventStart.getMinutes() / 60);
+      const eventEndHour = eventEnd.getHours() + (eventEnd.getMinutes() / 60);
       
       // Vérifier si l'heure actuelle est dans la plage de l'événement
-      return hour >= startTime && hour < endTime;
+      return hour >= eventStartHour && hour < eventEndHour;
     });
   };
 
@@ -413,7 +406,6 @@ export default function Calendar({ evenements = [], onUpdateEvenements }: Calend
 
   const renderDayView = () => {
     const hours = Array.from({ length: 24 }, (_, i) => i);
-    const dayEvents = getEventsForDate(currentDate);
     
     return (
       <Card>

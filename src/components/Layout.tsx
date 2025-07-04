@@ -69,12 +69,6 @@ const Header = memo(({ currentPage }: { currentPage: string }) => {
             </>
           )}
         </div>
-        
-        {/* Indicateur de statut */}
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <span className="text-xs text-gray-500">En ligne</span>
-        </div>
       </div>
     </header>
   );
@@ -130,14 +124,6 @@ const Sidebar = memo(({ currentPage, onPageChange }: {
         />
       ))}
     </nav>
-    
-    {/* Footer de la sidebar */}
-    <div className="absolute bottom-4 left-4 right-4">
-      <div className="text-xs text-gray-400 text-center">
-        <p>Logiciel de Gestion</p>
-        <p className="text-blue-500">Association</p>
-      </div>
-    </div>
   </div>
 ));
 
